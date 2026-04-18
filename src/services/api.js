@@ -23,6 +23,16 @@ const api = {
     },
 
     /**
+     * Build dynamic N-tier supply chain graph (Module 3)
+     */
+    async buildGraph(company, country = 'US', hsnCodes = []) {
+        const hsnKeys = hsnCodes.join(',');
+        const response = await fetch(`/api/graph/build?company=${encodeURIComponent(company)}&country=${country}&hsnKeys=${encodeURIComponent(hsnKeys)}`);
+        if (!response.ok) throw new Error('Graph Build failed');
+        return await response.json();
+    },
+
+    /**
      * Search for shipments (Module 1 - ImportYeti)
      */
     async getShipments(company) {

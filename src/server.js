@@ -146,6 +146,22 @@ app.get('/api/entity/hsn-infer', async (req, res) => {
     }
 });
 
+// Dynamically construct supply chain graph (Module 3)
+app.get('/api/graph/build', async (req, res) => {
+    try {
+        const { company, country, hsnKeys } = req.query;
+        if (!company) return res.status(400).json({ error: 'Missing company parameter' });
+
+        const hsnCodes = hsnKeys ? hsnKeys.split(',') : [];
+        const { buildSupplyChainGraph } = require('./graph/builder');
+
+        const graphData = await buildSupplyChainGraph(company, country || 'US', hsnCodes);
+        res.json(graphData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // OpenCorporates only
 app.get('/api/entity/opencorporates', async (req, res) => {
     try {
