@@ -371,44 +371,159 @@ const GraphPage = () => {
             </div>
           </div>
 
-          {/* Tier Controls */}
+          {/* ─── TIER CONTROLS ─── */}
           <div>
             <div style={{
               fontSize: '10px', fontWeight: 800, letterSpacing: '0.12em',
               textTransform: 'uppercase', color: '#475569',
-              marginBottom: '10px', fontFamily: 'Inter, sans-serif',
+              marginBottom: '12px', fontFamily: 'Inter, sans-serif',
               display: 'flex', alignItems: 'center', gap: '8px',
             }}>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
-              Visible Tiers
+              Supply Chain Depth
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
             </div>
-            <div style={{ display: 'flex', gap: '5px' }}>
-              {TIERS.map(t => (
-                <button
-                  key={t}
-                  onClick={() => toggleTier(t)}
-                  style={{
-                    flex: 1,
-                    background: visibleTiers.includes(t)
-                      ? 'linear-gradient(135deg, #7c3aed, #9333ea)'
-                      : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${visibleTiers.includes(t) ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: '8px',
-                    color: visibleTiers.includes(t) ? '#fff' : '#475569',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    fontFamily: 'Inter, sans-serif',
-                    padding: '7px 2px',
-                    transition: 'all 0.2s ease',
-                    boxShadow: visibleTiers.includes(t) ? '0 2px 12px rgba(124,58,237,0.4)' : 'none',
-                  }}
-                >
-                  T{t}
-                </button>
-              ))}
+
+            {/* 2-column grid of tier cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { t: 0, label: 'Root', desc: 'Subject company', icon: '🏢' },
+                { t: 1, label: 'Tier 1', desc: 'Direct suppliers', icon: '🔗' },
+                { t: 2, label: 'Tier 2', desc: 'Sub-suppliers', icon: '🏭' },
+                { t: 3, label: 'Tier 3', desc: 'Raw materials', icon: '⛏' },
+                { t: 4, label: 'Tier 4', desc: 'Mining & extract', icon: '🌏' },
+                { t: 5, label: 'Tier 5+', desc: 'Deep supply', icon: '🔬' },
+              ].map(({ t, label, desc, icon }) => {
+                const isActive = visibleTiers.includes(t)
+                const nodeCount = graphData.nodes.filter(n => n.tier === t).length
+                return (
+                  <motion.button
+                    key={t}
+                    onClick={() => toggleTier(t)}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    style={{
+                      background: isActive
+                        ? 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(168,85,247,0.12))'
+                        : 'rgba(255,255,255,0.025)',
+                      border: `1.5px solid ${isActive ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.07)'}`,
+                      borderRadius: '12px',
+                      padding: '12px 10px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isActive ? '0 0 16px rgba(124,58,237,0.2)' : 'none',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Top glow when active */}
+                    {isActive && (
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0,
+                        height: '1px',
+                        background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.6), transparent)',
+                      }} />
+                    )}
+
+                    {/* Tier number + node count */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{
+                        fontFamily: 'Sora, sans-serif',
+                        fontSize: '16px',
+                        fontWeight: 800,
+                        color: isActive ? '#c084fc' : '#475569',
+                        lineHeight: 1,
+                      }}>
+                        T{t}
+                      </span>
+                      {nodeCount > 0 && (
+                        <span style={{
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          color: isActive ? '#a855f7' : '#374151',
+                          background: isActive ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)',
+                          borderRadius: '4px',
+                          padding: '1px 5px',
+                          fontFamily: 'JetBrains Mono, monospace',
+                        }}>
+                          {nodeCount}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Icon + label */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+                      <span style={{ fontSize: '11px' }}>{icon}</span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: isActive ? '#f1f5f9' : '#64748b',
+                        fontFamily: 'Inter, sans-serif',
+                      }}>
+                        {label}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <div style={{
+                      fontSize: '9px',
+                      color: isActive ? '#94a3b8' : '#334155',
+                      fontFamily: 'Inter, sans-serif',
+                      lineHeight: 1.4,
+                    }}>
+                      {desc}
+                    </div>
+                  </motion.button>
+                )
+              })}
             </div>
+
+            {/* Tier 6 full-width toggle */}
+            <motion.button
+              onClick={() => toggleTier(6)}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              style={{
+                width: '100%',
+                marginTop: '8px',
+                background: visibleTiers.includes(6)
+                  ? 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(168,85,247,0.08))'
+                  : 'rgba(255,255,255,0.02)',
+                border: `1.5px solid ${visibleTiers.includes(6) ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: '10px',
+                padding: '10px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: visibleTiers.includes(6) ? '#c084fc' : '#475569', fontFamily: 'Sora, sans-serif' }}>T6</span>
+                <span style={{ fontSize: '11px' }}>🌐</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: visibleTiers.includes(6) ? '#f1f5f9' : '#64748b', fontFamily: 'Inter, sans-serif' }}>
+                    Tier 6 · Extended Network
+                  </div>
+                  <div style={{ fontSize: '9px', color: visibleTiers.includes(6) ? '#94a3b8' : '#334155', fontFamily: 'Inter, sans-serif' }}>
+                    Commodities &amp; global trade routes
+                  </div>
+                </div>
+              </div>
+              {graphData.nodes.filter(n => n.tier === 6).length > 0 && (
+                <span style={{
+                  fontSize: '9px', fontWeight: 700,
+                  color: visibleTiers.includes(6) ? '#a855f7' : '#374151',
+                  background: visibleTiers.includes(6) ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)',
+                  borderRadius: '4px', padding: '2px 6px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}>
+                  {graphData.nodes.filter(n => n.tier === 6).length}
+                </span>
+              )}
+            </motion.button>
           </div>
 
           {/* Risk Summary */}
