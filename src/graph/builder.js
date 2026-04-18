@@ -30,7 +30,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     const schema = `
 {
   "nodes": [
-    { "id": "company_hq", "label": "Company Name", "type": "root", "country": "US", "tier": 0, "risk_score": 10 }
+    { "id": "company_hq", "label": "Company Name", "type": "root", "country": "US", "tier": 0, "risk_score": 10, "lat": 37.7749, "lng": -122.4194 }
   ],
   "edges": [
     { "id": "e1", "source": "supplier_1", "target": "company_hq", "type": "supplies", "hsn": "8501.53", "confidence": "INFERRED" }
@@ -53,7 +53,7 @@ Requirements:
 3. "edges" array MUST connect nodes from Tier (N) to Tier (N-1). For example, Tier 6 connects to Tier 5.
 4. All IDs must be unique strings, e.g., "supplier_1", "root", "sub_2".
 5. Node types should be: "root", "manufacturer", "distributor", "assembler", "raw_material", "miner", "chemical".
-6. Include "risk_score" (1-100) and "country" (2-letter code) for every node.
+6. Include "risk_score" (1-100), "country" (2-letter code), and approximate geographical coordinates ("lat", "lng" as numbers) for every node.
 7. Each edge MUST have an "hsn" property describing what is being supplied, and "confidence" set to "INFERRED".
 
 Return ONLY a strictly valid JSON object matching this schema: ${schema}. Do not include any markdown formatting or explanations.`;
