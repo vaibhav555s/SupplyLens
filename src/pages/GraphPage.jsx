@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Zap, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
@@ -209,30 +209,45 @@ const GraphPage = () => {
   const navigate = useNavigate()
   const companyName = location.state?.company || 'Tesla Inc.'
   const realEntity = location.state?.entity || null // LIVE data from API
+  const hsnCodes = location.state?.hsnCodes || []
 
-  const liveGraphData = React.useMemo(() => {
-    if (!realEntity) return mockGraphData;
-    return {
-      ...mockGraphData,
-      nodes: mockGraphData.nodes.map(n => {
-        if (n.tier === 0) {
-          return {
-            ...n,
-            id: realEntity.node_id || n.id,
-            label: realEntity.name || n.label,
-            fullName: realEntity.name || n.fullName,
-            country: realEntity.country || n.country,
-            flag: '🌍', // Generic icon since emoji generation needs translation
-            confidence: realEntity.confidence || n.confidence,
-            lat: realEntity.lat || n.lat,
-            lng: realEntity.lng || n.lng,
-            sector: realEntity.extra?.industry || n.sector
-          };
+  // 1. Graph State
+  const [graphData, setGraphData] = useState({ nodes: [], edges: [] })
+  const [isBuildingGraph, setIsBuildingGraph] = useState(true)
+
+  // 2. Fetch/Construct Graph Mapping
+  useEffect(() => {
+    let mounted = true
+    const constructGraph = async () => {
+      try {
+        const rootCompany = realEntity?.name || companyName || 'Tesla'
+        const country = realEntity?.country || 'US'
+        const codes = hsnCodes?.length > 0 ? hsnCodes : ['8501.53']
+
+        setIsBuildingGraph(true)
+        const api = (await import('../services/api')).default;
+        const generatedGraph = await api.buildGraph(rootCompany, country, codes)
+
+        if (mounted) {
+          // If nodes came back empty (fallback), ensure it has at least the root node
+          if (!generatedGraph.nodes || generatedGraph.nodes.length === 0) {
+            generatedGraph.nodes = [{ id: 'root', label: rootCompany, type: 'root', country, tier: 0, risk_score: 10 }]
+            generatedGraph.edges = []
+          }
+          setGraphData(generatedGraph)
+          setIsBuildingGraph(false)
         }
-        return n;
-      })
-    };
-  }, [realEntity]);
+      } catch (err) {
+        console.error("Failed to build dynamic graph:", err)
+        if (mounted) {
+          setGraphData(mockGraphData) // Fallback to mock for UI demo
+          setIsBuildingGraph(false)
+        }
+      }
+    }
+    constructGraph()
+    return () => { mounted = false }
+  }, [realEntity, companyName, hsnCodes])
 
   const [view, setView] = useState('graph')
   const [visibleTiers, setVisibleTiers] = useState([0, 1, 2, 3])
@@ -242,9 +257,9 @@ const GraphPage = () => {
   const [showToast, setShowToast] = useState(false)
   const [prunedOpen, setPrunedOpen] = useState(false)
 
-  const tier0 = liveGraphData.nodes.find(n => n.tier === 0)
-  const tier1Count = liveGraphData.nodes.filter(n => n.tier === 1).length
-  const tier2Count = liveGraphData.nodes.filter(n => n.tier === 2).length
+  const tier0 = graphData.nodes.find(n => n.tier === 0)
+  const tier1Count = graphData.nodes.filter(n => n.tier === 1).length
+  const tier2Count = graphData.nodes.filter(n => n.tier === 2).length
 
   const toggleTier = (t) => {
     setVisibleTiers(prev =>
@@ -270,9 +285,9 @@ const GraphPage = () => {
   }
 
   const riskCounts = {
-    sanctions: liveGraphData.nodes.filter(n => n.sanctions).length,
-    high: liveGraphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
-    clear: liveGraphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
+    sanctions: graphData.nodes.filter(n => n.sanctions).length,
+    high: graphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
+    clear: graphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
   }
 
   return (
@@ -519,7 +534,14 @@ const GraphPage = () => {
         {/* Graph/Map area */}
         <div style={{ flex: 1, width: '100%', height: '100%' }}>
           <AnimatePresence mode="wait">
-            {view === 'graph' ? (
+            {isBuildingGraph ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#a855f7', fontFamily: 'Sora, sans-serif' }}>
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}>
+                  <Zap size={48} />
+                </motion.div>
+                <h3 style={{ marginTop: '24px', letterSpacing: '0.05em' }}>Plotting Real-Time Global Network...</h3>
+              </div>
+            ) : view === 'graph' ? (
               <motion.div
                 key="graph"
                 initial={{ opacity: 0 }}
@@ -529,7 +551,7 @@ const GraphPage = () => {
                 style={{ width: '100%', height: '100%' }}
               >
                 <SupplyGraph
-                  graphData={liveGraphData}
+                  graphData={graphData}
                   visibleTiers={visibleTiers}
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
@@ -546,7 +568,7 @@ const GraphPage = () => {
                 style={{ width: '100%', height: '100%' }}
               >
                 <GeoMap
-                  graphData={liveGraphData}
+                  graphData={graphData}
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
                   disruptions={disruptions}
