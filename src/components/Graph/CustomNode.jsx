@@ -131,6 +131,18 @@ const CustomNode = memo(({ data, selected }) => {
         </div>
       )}
 
+      {/* Product Name */}
+      {data.productName && (
+        <div style={{
+          fontSize: '11px',
+          color: '#38bdf8',
+          marginBottom: '8px',
+          fontWeight: 500,
+        }}>
+          {data.productName}
+        </div>
+      )}
+
       {/* Sector */}
       {data.sector && (
         <div style={{

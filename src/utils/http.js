@@ -130,10 +130,13 @@ async function httpPost(url, data, options = {}) {
                     ...headers,
                 },
                 timeout,
+                validateStatus: (status) => status < 500,
             });
 
             if (response.status === 429) {
                 const retryAfter = parseInt(response.headers['retry-after'], 10) || 5;
+                const errMsg = response.data?.error?.message || 'Request failed with status code 429 (Rate Limit)';
+                lastError = new Error(errMsg);
                 await sleep(retryAfter * 1000);
                 continue;
             }

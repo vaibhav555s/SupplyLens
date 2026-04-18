@@ -19,12 +19,52 @@ const getLayoutedElements = (nodes, edges) => {
   g.setDefaultEdgeLabel(() => ({}))
   g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 })
 
+  const nodesMap = new Map(nodes.map(n => [n.id, n]));
+  
+  // 1. Normalize edge direction (Higher Tier -> Lower Tier)
+  let normalizedEdges = edges.map(edge => {
+    const s = nodesMap.get(edge.source);
+    const t = nodesMap.get(edge.target);
+    if (!s || !t) return edge;
+    // Materials flow from Higher Tier to Lower Tier (e.g. 1 -> 0)
+    if (s.data.tier < t.data.tier) {
+      return { ...edge, source: edge.target, target: edge.source };
+    }
+    return edge;
+  });
+
+  // 2. Prevent floating components: Ensure all Tier>0 nodes have at least one downward link
+  const connectedEdges = [...normalizedEdges];
+  nodes.forEach(node => {
+     if (node.data && node.data.tier > 0) {
+        const hasOutgoing = connectedEdges.some(e => e.source === node.id && nodesMap.get(e.target)?.data?.tier < node.data.tier);
+        if (!hasOutgoing) {
+           // Find the closest valid lower tier node to maintain tiered structure
+           let targetNode = null;
+           for (let i = node.data.tier - 1; i >= 0; i--) {
+               targetNode = nodes.find(n => n.data && n.data.tier === i);
+               if (targetNode) break;
+           }
+           if (targetNode) {
+              connectedEdges.push({
+                  id: `auto-edge-${node.id}-${targetNode.id}`,
+                  source: node.id,
+                  target: targetNode.id,
+                  type: 'smoothstep',
+                  animated: true,
+                  data: { confidence: 'INFERRED' }
+              });
+           }
+        }
+     }
+  });
+
   nodes.forEach((node) => {
-    const width = node.data.tier === 0 ? 220 : node.data.tier === 1 ? 180 : 170
+    const width = node.data && node.data.tier === 0 ? 220 : node.data && node.data.tier === 1 ? 180 : 170
     g.setNode(node.id, { width, height: 140 })
   })
 
-  edges.forEach((edge) => {
+  connectedEdges.forEach((edge) => {
     g.setEdge(edge.source, edge.target)
   })
 
@@ -36,12 +76,12 @@ const getLayoutedElements = (nodes, edges) => {
       return {
         ...node,
         position: {
-          x: nodeWithPosition.x - (node.data.tier === 0 ? 110 : 90),
+          x: nodeWithPosition.x - (node.data && node.data.tier === 0 ? 110 : 90),
           y: nodeWithPosition.y - 70,
         },
       }
     }),
-    edges,
+    edges: connectedEdges,
   }
 }
 
@@ -82,7 +122,7 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
           ...n,
           disrupted: disruptions.includes(n.id),
           atRisk: !disruptions.includes(n.id) && 
-            graphData.edges.some(e => disruptions.includes(e.source) && e.target === n.id),
+            (graphData.edges || []).some(e => disruptions.includes(e.source) && e.target === n.id),
         },
         position: { x: 0, y: 0 },
       }))

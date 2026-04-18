@@ -98,7 +98,13 @@ export const mockGraphData = {
       value: "N/A",
       firstSeen: "Jan 2015",
       lastSeen: "Aug 2024",
-      sector: "EV Manufacturer"
+      sector: "EV Manufacturer",
+      productName: "Electric Vehicles",
+      country_risk_score: 88,
+      gpr_score: 30,
+      sanctions_flag: false,
+      data_source: "SEC Filings / Corporate Profile",
+      data_source_detail: "Root Company Data"
     },
     // Tier 1 — Direct Suppliers
     { 
@@ -118,7 +124,13 @@ export const mockGraphData = {
       firstSeen: "Mar 2019",
       lastSeen: "Aug 2024",
       sector: "Semiconductor Foundry",
-      concentrationRisk: 71
+      concentrationRisk: 71,
+      productName: "Advanced Logic Chips (3nm/5nm)",
+      country_risk_score: 62,
+      gpr_score: 85,
+      sanctions_flag: false,
+      data_source: "Taiwan Customs Export Data",
+      data_source_detail: "Verified export shipments to US"
     },
     { 
       id: "samsung_sdi", 
@@ -136,7 +148,13 @@ export const mockGraphData = {
       value: "1.1B",
       firstSeen: "Jan 2019",
       lastSeen: "Jul 2024",
-      sector: "Battery Manufacturer"
+      sector: "Battery Manufacturer",
+      productName: "Lithium-ion Battery Modules",
+      country_risk_score: 74,
+      gpr_score: 45,
+      sanctions_flag: false,
+      data_source: "ImportYeti (Bill of Lading)",
+      data_source_detail: "US Customs Import Records"
     },
     { 
       id: "nidec", 

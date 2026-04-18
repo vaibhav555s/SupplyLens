@@ -78,9 +78,13 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
     )
   }
 
-  const countryRisk = node.countryRisk || 0
+  const countryRisk = node.country_risk_score ?? node.countryRisk ?? 0
   const riskLevel = countryRisk >= 80 ? 'clear' : countryRisk >= 60 ? 'moderate' : 'high'
-  const gprLevel = node.country === 'TW' || node.country === 'CN' ? 'elevated' : 'clear'
+  const gprLevel = node.gpr_score ? (node.gpr_score > 100 ? 'high' : node.gpr_score > 80 ? 'elevated' : 'clear') : (node.country === 'TW' || node.country === 'CN' ? 'elevated' : 'clear')
+  
+  const sanctions = node.sanctions_flag ?? node.sanctions ?? false
+  const dataSource = node.data_source || (node.confidence === 'VERIFIED' ? 'ImportYeti (Bill of Lading)' : 'LLM-inferred (GPT-4o)')
+  const dataSourceDetail = node.data_source_detail || (node.confidence === 'VERIFIED' ? 'US Customs Import Records' : 'Not confirmed via trade records')
 
   return (
     <motion.div
@@ -117,6 +121,11 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
         <div style={{ fontSize: '12px', color: '#64748b', fontFamily: 'Inter, sans-serif' }}>
           {node.fullName}
         </div>
+        {node.productName && (
+          <div style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'Inter, sans-serif', marginTop: '4px', fontWeight: 500 }}>
+            {node.productName}
+          </div>
+        )}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -188,8 +197,8 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
         </div>
         <RiskRow
           label="Sanctions"
-          status={node.sanctions ? 'high' : 'clear'}
-          detail={node.sanctions ? 'MATCH FOUND' : 'Clear'}
+          status={sanctions ? 'high' : 'clear'}
+          detail={sanctions ? 'MATCH FOUND' : 'Clear'}
         />
         <RiskRow
           label="Country Risk"
@@ -199,7 +208,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
         <RiskRow
           label="GPR Index"
           status={gprLevel}
-          detail={gprLevel === 'elevated' ? 'Elevated' : 'Normal'}
+          detail={gprLevel === 'high' ? 'High' : gprLevel === 'elevated' ? 'Elevated' : 'Normal'}
         />
         {node.concentrationRisk && (
           <RiskRow
@@ -221,10 +230,10 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
           Data Source
         </div>
         <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-          {node.confidence === 'VERIFIED' ? 'ImportYeti (Bill of Lading)' : 'LLM-inferred (GPT-4o)'}
+          {dataSource}
         </div>
         <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-          {node.confidence === 'VERIFIED' ? 'US Customs Import Records' : 'Not confirmed via trade records'}
+          {dataSourceDetail}
         </div>
       </div>
 
