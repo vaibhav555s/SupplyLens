@@ -13,12 +13,31 @@ const TIER_COLORS = {
 }
 
 const getRiskStyle = (node) => {
+  if (node.bypassed) {
+    return {
+      border: 'rgba(71, 85, 105, 0.5)',
+      bg: 'rgba(20, 20, 25, 0.95)',
+      pulse: '',
+      glowColor: null,
+      opacity: 0.5,
+    }
+  }
+  if (node.isNewPivot) {
+    return {
+      border: '#10b981',
+      bg: 'rgba(16, 185, 129, 0.15)',
+      pulse: 'node-pulse-success',
+      glowColor: 'rgba(16, 185, 129, 0.5)',
+      opacity: 1,
+    }
+  }
   if (node.disrupted) {
     return {
       border: 'rgba(239, 68, 68, 0.95)',
       bg: 'rgba(239, 68, 68, 0.18)',
       pulse: 'node-pulse-danger',
       glowColor: 'rgba(239,68,68,0.4)',
+      opacity: 1,
     }
   }
   if (node.atRisk) {
@@ -27,6 +46,7 @@ const getRiskStyle = (node) => {
       bg: 'rgba(245, 158, 11, 0.1)',
       pulse: 'node-pulse-warning',
       glowColor: 'rgba(245,158,11,0.3)',
+      opacity: 1,
     }
   }
   if (node.sanctions) {
@@ -35,6 +55,7 @@ const getRiskStyle = (node) => {
       bg: 'rgba(239, 68, 68, 0.08)',
       pulse: 'node-pulse-danger',
       glowColor: 'rgba(239,68,68,0.25)',
+      opacity: 1,
     }
   }
   if (node.countryRisk && node.countryRisk < 60) {
@@ -43,9 +64,10 @@ const getRiskStyle = (node) => {
       bg: 'rgba(245, 158, 11, 0.06)',
       pulse: '',
       glowColor: null,
+      opacity: 1,
     }
   }
-  return null
+  return { opacity: 1 }
 }
 
 const CustomNode = memo(({ data, selected }) => {
@@ -101,12 +123,13 @@ const CustomNode = memo(({ data, selected }) => {
           padding: '14px 16px',
           fontFamily: 'Inter, sans-serif',
           cursor: 'pointer',
+          opacity: riskStyle?.opacity || 1,
           boxShadow: selected
-            ? `0 0 0 3px rgba(192,132,252,0.25), ${tierConfig.shadow}`
-            : riskStyle
+            ? `0 0 0 3px ${glowColor || 'rgba(192,132,252,0.25)'}, ${tierConfig.shadow}`
+            : riskStyle && riskStyle.border
               ? `0 0 16px ${riskStyle.border}40, ${tierConfig.shadow}`
               : tierConfig.shadow,
-          transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
+          transition: 'box-shadow 0.25s ease, border-color 0.25s ease, opacity 0.3s ease',
         }}
       >
         {/* Handles */}
@@ -296,16 +319,23 @@ const CustomNode = memo(({ data, selected }) => {
               ◈ {data.shipments.toLocaleString()}
             </span>
           )}
-          {data.disrupted && (
+          {data.bypassed ? (
+            <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.03em' }}>
+              ❌ CANCELLED
+            </span>
+          ) : data.isNewPivot ? (
+            <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 700, letterSpacing: '0.03em' }}>
+              ✨ NEW ROUTE
+            </span>
+          ) : data.disrupted ? (
             <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 700, letterSpacing: '0.03em' }}>
               ⚡ DISRUPTED
             </span>
-          )}
-          {data.atRisk && !data.disrupted && (
+          ) : data.atRisk ? (
             <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 700, letterSpacing: '0.03em' }}>
               ⚠ AT RISK
             </span>
-          )}
+          ) : null}
         </div>
       </div>
     </motion.div>

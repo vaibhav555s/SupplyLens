@@ -150,7 +150,6 @@ app.get('/api/entity/hsn-infer', async (req, res) => {
     }
 });
 
-// Dynamically construct supply chain graph (Module 3)
 app.get('/api/graph/build', async (req, res) => {
     try {
         const { company, country, hsnKeys } = req.query;
@@ -160,6 +159,21 @@ app.get('/api/graph/build', async (req, res) => {
         const { buildSupplyChainGraph } = require('./graph/builder');
 
         const graphData = await buildSupplyChainGraph(company, country || 'US', hsnCodes);
+        res.json(graphData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Dynamically generate an alternative supplier (AI Pivot)
+app.get('/api/graph/resource', async (req, res) => {
+    try {
+        const { nodeId, hsn, tier, parentId } = req.query;
+        if (!nodeId || !parentId) return res.status(400).json({ error: 'Missing nodeId or parentId parameter' });
+
+        const { generateAlternativeSupplier } = require('./graph/resource');
+
+        const graphData = await generateAlternativeSupplier(nodeId, hsn, parseInt(tier) || 1, parentId);
         res.json(graphData);
     } catch (err) {
         res.status(500).json({ error: err.message });
