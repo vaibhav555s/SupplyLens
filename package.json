@@ -1,20 +1,44 @@
 {
   "name": "supply-chain-xray",
+  "private": true,
   "version": "1.0.0",
   "description": "N-tier supply chain graph from open trade data",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node src/server.js",
+    "dev:frontend": "vite",
+    "dev:backend": "node src/server.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test:m1": "node tests/test_module1.js",
     "test:m2": "node tests/test_module2.js",
     "test": "node tests/test_module1.js && node tests/test_module2.js"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.8",
     "axios": "^1.7.0",
     "cheerio": "^1.0.0",
+    "clsx": "^2.1.1",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
+    "framer-motion": "^11.18.2",
     "ioredis": "^5.4.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.416.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.30.3",
+    "reactflow": "^11.11.4",
     "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.40",
+    "tailwindcss": "^3.4.7",
+    "vite": "^5.4.2"
   }
 }
