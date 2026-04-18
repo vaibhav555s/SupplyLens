@@ -208,6 +208,31 @@ const GraphPage = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const companyName = location.state?.company || 'Tesla Inc.'
+  const realEntity = location.state?.entity || null // LIVE data from API
+
+  const liveGraphData = React.useMemo(() => {
+    if (!realEntity) return mockGraphData;
+    return {
+      ...mockGraphData,
+      nodes: mockGraphData.nodes.map(n => {
+        if (n.tier === 0) {
+          return {
+            ...n,
+            id: realEntity.node_id || n.id,
+            label: realEntity.name || n.label,
+            fullName: realEntity.name || n.fullName,
+            country: realEntity.country || n.country,
+            flag: '🌍', // Generic icon since emoji generation needs translation
+            confidence: realEntity.confidence || n.confidence,
+            lat: realEntity.lat || n.lat,
+            lng: realEntity.lng || n.lng,
+            sector: realEntity.extra?.industry || n.sector
+          };
+        }
+        return n;
+      })
+    };
+  }, [realEntity]);
 
   const [view, setView] = useState('graph')
   const [visibleTiers, setVisibleTiers] = useState([0, 1, 2, 3])
@@ -217,9 +242,9 @@ const GraphPage = () => {
   const [showToast, setShowToast] = useState(false)
   const [prunedOpen, setPrunedOpen] = useState(false)
 
-  const tier0 = mockGraphData.nodes.find(n => n.tier === 0)
-  const tier1Count = mockGraphData.nodes.filter(n => n.tier === 1).length
-  const tier2Count = mockGraphData.nodes.filter(n => n.tier === 2).length
+  const tier0 = liveGraphData.nodes.find(n => n.tier === 0)
+  const tier1Count = liveGraphData.nodes.filter(n => n.tier === 1).length
+  const tier2Count = liveGraphData.nodes.filter(n => n.tier === 2).length
 
   const toggleTier = (t) => {
     setVisibleTiers(prev =>
@@ -245,9 +270,9 @@ const GraphPage = () => {
   }
 
   const riskCounts = {
-    sanctions: mockGraphData.nodes.filter(n => n.sanctions).length,
-    high: mockGraphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
-    clear: mockGraphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
+    sanctions: liveGraphData.nodes.filter(n => n.sanctions).length,
+    high: liveGraphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
+    clear: liveGraphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
   }
 
   return (
@@ -504,7 +529,7 @@ const GraphPage = () => {
                 style={{ width: '100%', height: '100%' }}
               >
                 <SupplyGraph
-                  graphData={mockGraphData}
+                  graphData={liveGraphData}
                   visibleTiers={visibleTiers}
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
@@ -521,7 +546,7 @@ const GraphPage = () => {
                 style={{ width: '100%', height: '100%' }}
               >
                 <GeoMap
-                  graphData={mockGraphData}
+                  graphData={liveGraphData}
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
                   disruptions={disruptions}

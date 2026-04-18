@@ -1,0 +1,388 @@
+
+⬡
+SUPPLY CHAIN X-RAY
+Product Requirements Document
+
+
+Build an N-tier supply chain graph from open trade data.
+
+1. Product Overview
+Supply Chain X-Ray is a web-based interactive platform that takes a company name as input and recursively traces its full supply chain — from direct importers all the way back to raw material producers — using only publicly available global trade data.
+
+The system maps supplier relationships as a directed, multi-tier graph, applies BOM-aware filtering to prune irrelevant trade flows, and overlays compliance, geopolitical, and financial risk signals on every node.
+
+1.1  Problem Being Solved
+Modern supply chains lack visibility beyond Tier-1. A company knows who it buys from directly, but has no reliable picture of who supplies its suppliers. This creates blind spots for:
+Geopolitical concentration risk (e.g. single-country dependency for a critical input)
+Sanctions and forced-labour exposure deep in the chain
+Disruption risk from natural disasters, port closures, or trade conflicts
+ESG and compliance due-diligence requirements (CSRD, LkSG, UFLPA)
+
+1.2  Core Value Proposition
+Automatically resolves N-tier supply chains from open trade data, not paywalled databases
+Distinguishes verified edges (company-to-company) from inferred edges (country-level) — transparent about data confidence
+Progressive enrichment — repeated searches on the same company deepen the graph rather than restart it
+Interactive geo-map + graph view in one platform
+Live disruption simulation — click any node, mark it disrupted, watch cascading risk propagate instantly
+
+2. USPs & Differentiators
+These are the features that will win the demo. Build them in this priority order.
+
+2.1  USP-1: Live Disruption Simulation (★ Top Priority)
+
+After tracing the supply chain, the user can click any node and mark it "disrupted" — e.g. Taiwan blockade, Xinjiang ban, port closure. The graph instantly re-colours to show cascading impact: which downstream companies lose a supplier, which HS codes go dark, what percentage of the final product's BOM is now at risk.
+
+Implementation: the graph already contains all the data. Disruption is just re-colouring edges and propagating a flag down the tree. The algorithm is a simple BFS from the disrupted node marking all downstream edges as 'at risk.'
+
+UI: disrupted node turns red, directly affected downstream nodes turn amber, indirectly affected turn yellow. A panel shows: X% of BOM at risk, Y alternative suppliers identified, Z countries affected.
+
+2.2  USP-2: Confidence-Layered Graph
+
+Every edge is visually coded:
+Solid line = verified shipment record (ImportYeti / Zauba bill-of-lading data)
+Dashed line = country-level inference (UN Comtrade country-to-country flows)
+Dotted line = LLM-inferred (named in news/ESG reports but not in trade records)
+
+Nodes carry a confidence badge: VERIFIED / INFERRED. Every inferred node shows a tooltip explaining why it is inferred and what data would be needed to upgrade it.
+
+2.3  USP-3: BOM-Aware Pruning (Visible & Auditable)
+
+Show a 'Pruned Nodes' collapsible panel at each tier: 'We found 47 trade flows for TSMC — kept 8 that are actual chip-manufacturing inputs, removed 39 (office supplies, packaging, logistics).' The filter is auditable and explainable, not hidden.
+
+2.4  USP-4: Progressive Graph Enrichment
+
+Graph data persists in Neo4j between sessions. Nodes resolved in prior traversals are surfaced immediately before querying open data. Repeated searches on the same company or product progressively enrich rather than restart the graph. This is what separates a toy from a platform.
+
+3. Architecture Overview
+The system is composed of five layers: Input, Tier-0 Resolution, Traversal Engine, Enrichment, and Visualization. Data flows top-down through these layers; a recursive loop in the Traversal Engine drives multi-tier discovery.
+
+
+4. Data Sources
+All data sources used are free-tier or open. The table below maps each source to its tier, what it provides, its known limitations, and whether it provides company-level or country-level data.
+
+4.1  Trade Data Sources
+
+4.2  Open Data Coverage by Tier
+Understanding what data is available at each tier is critical for realistic expectations and honest system design.
+
+
+4.3  Entity Resolution Sources
+
+4.4  Risk & Compliance Sources
+
+4.5  HSN Code Normalisation
+Trade records from different countries use different digit extensions on the same 6-digit WCO base. The system normalises consistently at every tier hop.
+
+
+
+4.6  API Registration Checklist
+
+5. Traversal Logic
+The traversal engine is the core of the system. It resolves supply chain nodes tier by tier, applying BOM filtering at each hop and using the mirror trick to maximise company-level data coverage before falling back to country-level nodes.
+
+5.1  Tier-0 — Company Input to HSN Selection
+Entry point: user types a company name (e.g. 'Tesla Inc.').
+
+Check graph cache — if company already exists with HSN codes, surface those immediately
+Query ImportYeti API with company name → retrieve all bill-of-lading records
+Query Zauba for the same company name (Indian trade leg)
+Extract all unique HSN codes across all records
+For each code, fetch commodity description from USITC DataWeb
+Present table to user: HSN code | commodity description | record count | top shipper countries
+User selects one or more HSN codes to anchor the traversal — this becomes Tier-0
+
+5.2  Tier-1 — Direct Suppliers
+Question being answered: 'Who actually ships [selected HSN code] to [company name]?'
+
+ImportYeti shipment records already contain the foreign shipper name — these are Tier-1 nodes
+Mark these edges as VERIFIED (solid line in graph)
+Resolve each shipper through OpenCorporates / Wikidata to get canonical entity
+Run sanctions screen on every Tier-1 node immediately (OpenSanctions)
+Score each edge by country risk (World Bank WGI score for shipper country)
+
+5.3  Tier-2+ — Recursive Traversal
+Each Tier-1 company becomes the new 'company' input. The question flips to: 'What does [Tier-1 company] import to produce [HSN commodity]?'
+
+Primary path — verified company-level
+Search ImportYeti for Tier-1 company name as shipper in other records (mirror trick)
+Apply BOM filter to keep only upstream-relevant HSN codes
+Shippers in those records become Tier-2 nodes — mark edges VERIFIED
+
+Fallback path — inferred (when company absent from open records)
+UN Comtrade: query Tier-1 company's home country as reporter, find top import partners for BOM-filtered HS codes
+Results become country-level nodes — mark edges INFERRED (dashed line)
+LLM call as secondary fallback: 'What are known major suppliers of [HS commodity] to companies in [country]?' — results marked INFERRED
+
+Stop conditions
+Node is in HS Chapter 01–27 (raw minerals, ores, agricultural goods) — no meaningful upstream
+Maximum tier depth reached (configurable, default 6)
+Node already exists in graph (deduplication)
+
+5.4  BOM Filter
+At every tier hop, a BOM (Bill of Materials) filter prunes irrelevant trade flows. Without this, the graph explodes with tangential trade — office supplies, packaging, MRO goods.
+
+HS sub-tree analysis (primary): only propagate child HS codes that are structural inputs to the parent commodity. An HS 8501 motor requires HS 7408 (copper wire), HS 7225 (electrical steel), HS 8503 (motor components). It does NOT require HS 9403 (office furniture).
+LLM relevance check (secondary): pass (parent HSN, candidate HSN, candidate commodity description) to LLM — binary yes/no: 'Is [candidate] a direct material input to [parent commodity]?'
+Cache all filter decisions — same (parent, candidate) pair resolved once and reused across traversals
+UI: show a 'Pruned Nodes' collapsible panel per tier showing what was filtered and why
+
+5.5  Disruption Simulation Engine
+This is the live what-if engine that runs on top of the completed graph.
+
+User clicks any node and selects a disruption type: Sanctions Ban, Natural Disaster, Port Closure, Trade Embargo
+BFS propagation: mark the disrupted node as inactive, traverse all downstream edges, mark directly dependent nodes as 'at risk' (amber), mark indirectly dependent as 'watch' (yellow)
+Risk panel updates: X% of final product BOM now at risk, Y alternative suppliers identified (nodes at same tier with same HS code), Z countries affected
+Graph re-colours in real time — no re-fetch, purely graph traversal on existing data
+Reset button restores original graph state
+
+6. Module Breakdown
+The system is split into 7 buildable modules. Each module has a clear input/output contract, can be built and tested independently, and maps to the build phases in Section 9.
+
+Module 1 — Data Connectors
+
+Responsibility: fetch raw trade data from all external sources and return normalised structured JSON.
+
+ImportYeti: given company name → return [ { shipper_name, hs_code, port, date, weight, destination } ]
+Zauba: given company name → return same schema (India legs)
+UN Comtrade: given (reporter_country_iso, hs6_code) → return [ { partner_country, trade_value, quantity } ]
+USITC: given hs_code → return { description, chapter, section }
+All connectors: handle rate limits, retry with backoff, write responses to Redis cache
+HSN normaliser utility: truncate any national code to 6-digit WCO base; expand to national on request
+
+Module 2 — Entity Resolution
+
+Responsibility: given a fuzzy company name and country, return a canonical entity record.
+
+Try OpenCorporates first: search by name + jurisdiction → return { legal_name, company_id, country, lat, lng }
+Fallback to Wikidata: SPARQL query by name → return QID, headquarters country, parent company
+Nominatim: geocode company address or country → return { lat, lng }
+LLM fallback: if entity not found in structured sources, Claude API call with prompt to identify known company from news/ESG context — result flagged as INFERRED
+
+Module 3 — BOM Filter
+
+Responsibility: given (parent HS code, list of candidate HS codes), return only those candidates that are material inputs to the parent commodity.
+
+HS sub-tree analysis: use WCO nomenclature hierarchy to determine if candidate HS is a structural input to parent HS (deterministic, no API cost)
+LLM check: for ambiguous candidates, single API call with binary prompt — yes/no with one-sentence reasoning
+Decision cache (Redis): key = (parent_hs6, candidate_hs6) → bool. Never re-query the same pair.
+Output: { kept: [...], pruned: [...] } — both lists returned for UI transparency
+
+Module 4 — Graph Store
+
+Responsibility: persist and query the supply chain graph. All other modules read/write through this module.
+
+Node schema: node_id, name, country, node_type (COMPANY|COUNTRY), tier, hs_codes[], confidence (VERIFIED|INFERRED), sanctions_flag, country_risk_score, gpr_score, lat, lng, last_updated
+Edge schema: source_id, target_id, hs_code, commodity, confidence, data_source, shipment_count, first_seen, last_seen, tier
+Upsert logic: if node exists, merge new HS codes and update last_updated. Never duplicate.
+Cache-first lookup: before querying any external API, check if (company, hs_code) already resolved in graph
+Cypher queries: find_node_by_name, get_tier_N_nodes, find_all_paths, get_downstream_nodes (for disruption sim)
+
+Module 5 — Traversal Orchestrator
+
+Responsibility: orchestrate the recursive traversal, calling Modules 1–4 in sequence and persisting results to the graph store.
+
+Entry: receive (company_name, selected_hs_codes[], max_depth)
+Tier-0: call ImportYeti + Zauba connectors → extract HSN codes → present to user for selection
+Tier-1: extract shippers from Tier-0 records → resolve entities (Module 2) → sanctions screen → write to graph
+Tier-2+: for each node, run mirror trick (ImportYeti search as importer) → BOM filter → entity resolve → write to graph. On miss, fall back to UN Comtrade → country node → LLM inference
+Stop condition check at each node: HS Chapter 01–27 OR depth=max_depth OR node already in graph
+BullMQ job queue: each tier hop queued as async job — non-blocking, survives long traversals
+
+Module 6 — Risk Enrichment
+
+Responsibility: overlay risk signals on all nodes and edges in the graph.
+
+Sanctions: query OpenSanctions API for every company node. Cache OFAC SDN XML locally as offline fallback. Set sanctions_flag = true on match, store matched list name and entry date.
+Country risk: for every node, look up World Bank WGI political stability percentile and GPR Index score. Store as country_risk_score and gpr_score on node.
+Concentration risk: for each HS code in the graph, aggregate total trade value by country. If >60% traces to single country, emit a concentration alert with affected HS code and country.
+UFLPA list: overlay forced labour risk flags for entities/countries on the UFLPA entity list (downloadable from DHS.gov).
+
+Module 7 — Visualization & UI
+
+Responsibility: present the graph interactively, support disruption simulation, and provide the supplier dashboard.
+
+Graph View (Cytoscape.js)
+Nodes: circles/icons for companies, flag icons for country-level nodes
+Node colour: green = no risk, amber = country risk (WGI <40), red = sanctions flag
+Edge style: solid = VERIFIED, dashed = INFERRED (UN Comtrade), dotted = LLM-inferred
+Edge labels: HS code + commodity description
+Expand/collapse per tier — user drills into specific branches
+Click any node: detail panel showing name, country, HSN codes, shipment history, risk flags, data source
+Pruned nodes panel: collapsible, shows filtered-out trade flows at each tier
+
+Geo-Map View (Leaflet.js)
+World map with nodes placed at geocoded coordinates (Nominatim)
+Animated arcs between trading partners — arc weight proportional to shipment volume
+Country risk colour overlay (World Bank WGI)
+Concentration risk alert markers on high-dependency countries
+Toggle between graph view and geo-map view
+
+Disruption Simulator
+Disruption button on every node — click to open disruption modal
+Modal: select disruption type (Sanctions Ban / Natural Disaster / Port Closure / Trade Embargo)
+On confirm: BFS propagation marks downstream nodes at risk, re-colours graph in real time
+Risk summary panel: BOM% at risk, alternative suppliers at same tier, affected countries
+Reset button: clears all disruption flags, restores original colours
+
+Supplier Dashboard
+Saved search history — list of all companies previously searched
+Per-company summary: Tier-1 suppliers found, HSN codes, risk flags, date last updated
+Export to CSV: full node and edge list for a given traversal
+
+7. Graph Data Model
+
+7.1  Node Schema
+
+7.2  Edge Schema
+
+8. Technology Stack
+
+8.1  Frontend
+
+8.2  Backend
+
+9. Build Plan
+
+9.1  Phases
+
+9.2  Sprint 1 Priorities (Day 1–2)
+The data pipeline is the critical path — everything else is blocked on it.
+
+Task 1 — ImportYeti connector: call API / scrape with company name → parse shipper_name, hs_code, port, date, weight → return structured JSON
+Task 2 — HSN code deduplication + description lookup: aggregate unique HS codes → hit USITC DataWeb for commodity descriptions → return { hs_code, description, record_count, top_shipper_countries }
+Task 3 — UN Comtrade connector: given (reporter_country, hs_code) → return [ { partner_country, trade_value, quantity } ] → handle 6-digit normalisation
+Task 4 — Graph store setup: Neo4j schema → create Node + Edge with all fields from Section 7 → upsert logic → cache-first lookup
+
+9.3  Test Cases
+Use the sample companies from the reference data to validate the traversal. These are pre-validated ground truth cases.
+
+
+10. Key Decisions & Design Rationale
+
+11. Known Limitations
+
+12. Judging Criteria Mapping
+
+Supply Chain X-Ray · PRD v2.0 · SYN3RGY 3.0 Open Innovation Track
+🔥 1. THE CORE RULE (REMEMBER THIS)
+
+Every module must ONLY send/receive this format
+No custom fields, no random structures
+
+🧩 2. FINAL STANDARD FORMAT (USE THIS)
+✅ 1. Trade Record (Module 1 → Module 5)
+{
+  "source_name": "Foxconn",
+  "source_country": "CN",
+  "target_name": "Apple Inc",
+  "target_country": "US",
+  "hs_code": "854231",
+  "hs_code_6": "854231",
+  "commodity": "Electronic integrated circuits",
+  "trade_type": "export",
+  "shipment_count": 12,
+  "trade_value": 500000,
+  "quantity": 1000,
+  "unit": "kg",
+  "date_range": {
+    "start": "2023-01-01",
+    "end": "2023-12-31"
+  },
+  "data_source": "importyeti",
+  "confidence": "VERIFIED"
+}
+✅ 2. Entity Object (Module 2 Output)
+{
+  "node_id": "opencorp_12345",
+  "name": "Foxconn Technology Group",
+  "country": "CN",
+  "node_type": "COMPANY",
+  "lat": 22.5431,
+  "lng": 114.0579,
+  "confidence": "VERIFIED"
+}
+✅ 3. Graph Node (Module 4)
+{
+  "node_id": "foxconn_cn",
+  "name": "Foxconn",
+  "country": "CN",
+  "node_type": "COMPANY",
+  "tier": 1,
+  "hs_codes": ["854231"],
+  "confidence": "VERIFIED",
+  "sanctions_flag": false,
+  "country_risk_score": 45.2,
+  "gpr_score": 120.5,
+  "lat": 22.54,
+  "lng": 114.05,
+  "last_updated": "2026-04-18T12:00:00Z"
+}
+✅ 4. Graph Edge (Module 4)
+{
+  "edge_id": "foxconn_apple_854231",
+  "source_id": "foxconn_cn",
+  "target_id": "apple_us",
+  "hs_code": "854231",
+  "commodity": "Electronic integrated circuits",
+  "confidence": "VERIFIED",
+  "data_source": "importyeti",
+  "shipment_count": 12,
+  "first_seen": "2023-01-01",
+  "last_seen": "2023-12-31",
+  "tier": 1
+}
+✅ 5. Traversal Input (Module 5 Entry)
+{
+  "company_name": "Apple Inc",
+  "selected_hs_codes": ["854231"],
+  "max_depth": 4
+}
+✅ 6. BOM Filter Input/Output (Module 3)
+Input:
+{
+  "parent_hs_code": "854231",
+  "candidate_hs_codes": ["280461", "940330", "740811"]
+}
+Output:
+{
+  "kept": ["280461", "740811"],
+  "pruned": ["940330"]
+}
+⚙️ 3. HOW MODULES CONNECT (VERY CLEAR)
+Module 1 → Trade Records
+        ↓
+Module 2 → Entity Objects
+        ↓
+Module 5 → Uses both
+        ↓
+Module 4 → Stores Nodes + Edges
+        ↓
+Module 7 → Displays Graph
+🔥 4. CRITICAL NORMALIZATION RULES
+
+From your PRD :
+
+✅ Always:
+Use 6-digit HS code
+"hs_code_6": "854231"
+✅ Country codes:
+Use ISO format
+"country": "US"
+✅ Confidence:
+
+ONLY these:
+
+"confidence": "VERIFIED"
+
+or
+
+"confidence": "INFERRED"
+⚠️ 5. STRICT RULES (TO AVOID INTEGRATION ISSUES)
+❌ DO NOT:
+Change field names
+Add random keys
+Use different formats per module
+✅ ALWAYS:
+Return arrays where expected
+Keep naming consistent
+Use same casing (snake_case or camelCase — pick one)

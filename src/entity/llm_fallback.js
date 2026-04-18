@@ -35,7 +35,7 @@ async function resolveEntity(companyName, countryHint, industryHint) {
         const prompt = buildPrompt(companyName, countryHint, industryHint);
 
         const response = await httpPost(GROQ_API_URL, {
-            model: 'llama3-70b-8192',
+            model: 'llama-3.3-70b-versatile',
             max_tokens: 500,
             temperature: 0.1,
             response_format: { type: "json_object" },
@@ -122,7 +122,7 @@ function parseGroqResponse(response, companyName, countryHint) {
                 parent_company: parsed.parent_company || '',
                 known_products: parsed.known_products || [],
                 description: parsed.description || '',
-                inference_model: 'llama3-70b-8192',
+                inference_model: 'llama-3.3-70b-versatile',
             },
         };
     } catch (err) {
