@@ -24,15 +24,15 @@ const MapAutoFit = ({ nodes }) => {
     const bounds = nodes.map(n => [n.lat, n.lng])
     try {
       map.fitBounds(bounds, { padding: [60, 60] })
-    } catch (e) {}
+    } catch (e) { }
   }, [nodes.length])
   return null
 }
 
-const GeoMap = ({ graphData, selectedNode, onNodeClick, disruptions = [] }) => {
+const GeoMap = ({ graphData, visibleTiers, selectedNode, onNodeClick, disruptions = [] }) => {
   if (!graphData) return null
 
-  const nodes = graphData.nodes.filter(n => n.lat && n.lng)
+  const nodes = graphData.nodes.filter(n => n.lat && n.lng && (visibleTiers ? visibleTiers.includes(n.tier) : true))
   const edges = graphData.edges.filter(e => {
     const src = nodes.find(n => n.id === e.source)
     const tgt = nodes.find(n => n.id === e.target)

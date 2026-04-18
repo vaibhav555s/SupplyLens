@@ -30,7 +30,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     const schema = `
 {
   "nodes": [
-    { "id": "company_hq", "label": "Company Name", "type": "root", "country": "US", "tier": 0, "risk_score": 10 }
+    { "id": "company_hq", "label": "Company Name", "type": "root", "country": "US", "tier": 0, "risk_score": 10, "lat": 37.7749, "lng": -122.4194 }
   ],
   "edges": [
     { "id": "e1", "source": "supplier_1", "target": "company_hq", "type": "supplies", "hsn": "8501.53", "confidence": "INFERRED" }
@@ -38,25 +38,30 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
 }`;
 
     const prompt = `You are an expert supply chain graph generator.
-        Construct a deeply realistic 3 - tier supply chain map for the root company "${companyName}"(Country: ${country}).
+Construct a deeply realistic 6-tier supply chain map for the root company "${companyName}" (Country: ${country}).
 The map must be driven by the importation of these specific commodities / HSN codes: ${hsnString}.
 
-    Requirements:
-    1. "nodes" array MUST include the root company(tier: 0, id: "root").
-2. "nodes" array MUST include 3 - 5 Tier 1 immediate suppliers(tier: 1) located in different countries.
-3. "nodes" array MUST include 4 - 6 Tier 2 sub - component manufacturers(tier: 2) that supply the Tier 1 suppliers.
-4. "edges" array MUST connect Tier 2 nodes to Tier 1 nodes, and Tier 1 nodes to the "root" node.
-5. All IDs must be unique strings, e.g., "supplier_1", "root", "sub_2".
-6. Node types should be: "root", "manufacturer", "distributor", "assembler", "raw_material".
-7. Include "risk_score"(1 - 100) and "country"(2 - letter code) for every node.
-8. Each edge MUST have an "hsn" property describing what is being supplied, and "confidence" set to "INFERRED".
+Requirements:
+1. "nodes" array MUST include the root company (tier: 0, id: "root").
+2. "nodes" array MUST adhere to exactly 6 upstream tiers:
+   - Tier 1: 3-5 Direct Suppliers (assemblies)
+   - Tier 2: 4-6 Foreign Shippers / Sub-Suppliers
+   - Tier 3: 4-6 Component Material Producers
+   - Tier 4: 3-5 Raw Material Producers
+   - Tier 5: 3-5 Mining Inputs & Extraction Services
+   - Tier 6: 2-4 Raw Inputs to Mining Operations (Terminal Tier)
+3. "edges" array MUST connect nodes from Tier (N) to Tier (N-1). For example, Tier 6 connects to Tier 5.
+4. All IDs must be unique strings, e.g., "supplier_1", "root", "sub_2".
+5. Node types should be: "root", "manufacturer", "distributor", "assembler", "raw_material", "miner", "chemical".
+6. Include "risk_score" (1-100), "country" (2-letter code), and approximate geographical coordinates ("lat", "lng" as numbers) for every node.
+7. Each edge MUST have an "hsn" property describing what is being supplied, and "confidence" set to "INFERRED".
 
 Return ONLY a strictly valid JSON object matching this schema: ${schema}. Do not include any markdown formatting or explanations.`;
 
     try {
         const response = await httpPost(GROQ_API_URL, {
             model: 'llama-3.3-70b-versatile',
-            max_tokens: 3000,
+            max_tokens: 6000,
             temperature: 0.3,
             response_format: { type: "json_object" },
             messages: [
