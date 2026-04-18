@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://unpkg.com/reactflow@11.11.4/dist/style.css');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-base: #08080f;
+  --bg-card: #111118;
+  --bg-card-hover: #16161f;
+  --border-subtle: rgba(139, 92, 246, 0.12);
+  --border-hover: rgba(139, 92, 246, 0.35);
+  --purple-primary: #7c3aed;
+  --purple-light: #a855f7;
+  --purple-glow: rgba(124, 58, 237, 0.4);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+  --risk-red: #ef4444;
+  --risk-amber: #f59e0b;
+  --risk-green: #22c55e;
+}
+
+html, body {
+  background: #04040a;
+  font-family: 'Inter', sans-serif;
+  color: #f8fafc;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Font utilities */
+.font-sora { font-family: 'Sora', sans-serif; }
+.font-inter { font-family: 'Inter', sans-serif; }
+.font-mono-code { font-family: 'JetBrains Mono', monospace; }
+
+/* Ambient orb breathing animation */
+@keyframes orb-breathe {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.08); }
+}
+
+/* Risk node pulse animations */
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+}
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Edge flow animation */
+@keyframes flow {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Gradient text animation */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.5); }
+
+/* React Flow overrides */
+.react-flow__background {
+  background: #08080f !important;
+}
+
+.react-flow__controls {
+  background: rgba(13, 13, 20, 0.8) !important;
+  border: 1px solid rgba(139, 92, 246, 0.2) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(20px);
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1) !important;
+  color: #94a3b8 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(139, 92, 246, 0.1) !important;
+}
+
+.react-flow__minimap {
+  background: rgba(13, 13, 20, 0.8) !important;
+  border: 1px solid rgba(139, 92, 246, 0.2) !important;
+  border-radius: 12px !important;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: #0a0a10 !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid rgba(139, 92, 246, 0.2) !important;
+  background: rgba(13, 13, 20, 0.8) !important;
+  backdrop-filter: blur(20px);
+}
+
+.leaflet-control-zoom a {
+  background: transparent !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: rgba(139, 92, 246, 0.1) !important;
+  color: white !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(8, 8, 15, 0.7) !important;
+  color: #475569 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #6b7280 !important;
+}
+
+/* Disrupted node pulse class */
+.node-pulse-danger {
+  animation: pulse-danger 2s ease-in-out infinite;
+}
+
+.node-pulse-warning {
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+/* Glass morphism utility */
+.glass {
+  background: rgba(13, 13, 20, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+/* Volume bar animation */
+@keyframes grow-bar {
+  from { width: 0; }
+  to { width: var(--target-width); }
+}
+
+.volume-bar-fill {
+  animation: grow-bar 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
