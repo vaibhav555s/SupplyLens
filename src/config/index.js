@@ -9,6 +9,8 @@ module.exports = {
   comtradeApiKey: process.env.COMTRADE_API_KEY || '',
   openCorporatesApiKey: process.env.OPENCORPORATES_API_KEY || '',
   groqApiKey: process.env.GROQ_API_KEY || '',
+  mongodbUri: process.env.MONGODB_URI || '',
+  jwtSecret: process.env.JWT_SECRET || 'scxray_dev_secret_change_in_production',
 
   // Redis
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
