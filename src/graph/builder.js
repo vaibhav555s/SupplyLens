@@ -18,27 +18,27 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const COUNTRY_COORDS = {
-    US:{lat:37.09,lng:-95.71}, CN:{lat:35.86,lng:104.19}, JP:{lat:36.20,lng:138.25},
-    KR:{lat:35.90,lng:127.76}, TW:{lat:23.69,lng:120.96}, DE:{lat:51.16,lng:10.45},
-    IN:{lat:20.59,lng:78.96},  MX:{lat:23.63,lng:-102.55},CA:{lat:56.13,lng:-106.34},
-    GB:{lat:55.37,lng:-3.43},  FR:{lat:46.22,lng:2.21},   IT:{lat:41.87,lng:12.56},
-    BR:{lat:-14.23,lng:-51.92},VN:{lat:14.05,lng:108.27}, TH:{lat:15.87,lng:100.99},
-    MY:{lat:4.21,lng:101.97},  ID:{lat:-0.78,lng:113.92}, SG:{lat:1.35,lng:103.82},
-    AU:{lat:-25.27,lng:133.77},NL:{lat:52.13,lng:5.29},   HK:{lat:22.39,lng:114.10},
-    PH:{lat:12.87,lng:121.77},
+    US: { lat: 37.09, lng: -95.71 }, CN: { lat: 35.86, lng: 104.19 }, JP: { lat: 36.20, lng: 138.25 },
+    KR: { lat: 35.90, lng: 127.76 }, TW: { lat: 23.69, lng: 120.96 }, DE: { lat: 51.16, lng: 10.45 },
+    IN: { lat: 20.59, lng: 78.96 }, MX: { lat: 23.63, lng: -102.55 }, CA: { lat: 56.13, lng: -106.34 },
+    GB: { lat: 55.37, lng: -3.43 }, FR: { lat: 46.22, lng: 2.21 }, IT: { lat: 41.87, lng: 12.56 },
+    BR: { lat: -14.23, lng: -51.92 }, VN: { lat: 14.05, lng: 108.27 }, TH: { lat: 15.87, lng: 100.99 },
+    MY: { lat: 4.21, lng: 101.97 }, ID: { lat: -0.78, lng: 113.92 }, SG: { lat: 1.35, lng: 103.82 },
+    AU: { lat: -25.27, lng: 133.77 }, NL: { lat: 52.13, lng: 5.29 }, HK: { lat: 22.39, lng: 114.10 },
+    PH: { lat: 12.87, lng: 121.77 },
 };
 
-function coordsFor(iso) { return COUNTRY_COORDS[(iso||'').toUpperCase()] || {lat:0,lng:0}; }
+function coordsFor(iso) { return COUNTRY_COORDS[(iso || '').toUpperCase()] || { lat: 0, lng: 0 }; }
 
 function countryRisk(iso) {
-    if (['CN','RU','IR','KP','BY','MM'].includes(iso)) return Math.floor(Math.random()*20)+60;
-    if (['IN','VN','ID','MX','NG','PK'].includes(iso)) return Math.floor(Math.random()*20)+40;
-    return Math.floor(Math.random()*30)+20;
+    if (['CN', 'RU', 'IR', 'KP', 'BY', 'MM'].includes(iso)) return Math.floor(Math.random() * 20) + 60;
+    if (['IN', 'VN', 'ID', 'MX', 'NG', 'PK'].includes(iso)) return Math.floor(Math.random() * 20) + 40;
+    return Math.floor(Math.random() * 30) + 20;
 }
 
 function toNodeId(name) {
-    return (name||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)
-        || `n_${Math.random().toString(36).slice(2,8)}`;
+    return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+        || `n_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**
@@ -51,13 +51,13 @@ function extractJson(text) {
     if (raw.startsWith('```')) {
         raw = raw.replace(/^```[a-z]*\n/, '').replace(/```$/, '').trim();
     }
-    
-    try { return JSON.parse(raw); } catch {}
+
+    try { return JSON.parse(raw); } catch { }
 
     // Find the JSON block (skip any preamble text)
     const startObj = raw.indexOf('{');
     const startArr = raw.indexOf('[');
-    
+
     let start = -1;
     if (startObj !== -1 && startArr !== -1) start = Math.min(startObj, startArr);
     else if (startObj !== -1) start = startObj;
@@ -65,7 +65,7 @@ function extractJson(text) {
 
     if (start !== -1) {
         raw = raw.slice(start);
-        try { return JSON.parse(raw); } catch {}
+        try { return JSON.parse(raw); } catch { }
     }
 
     // Use jsonrepair to fix truncated / malformed JSON (closes unclosed arrays/objects)
@@ -130,11 +130,11 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
     // Tier 0 — root
     const rootCoords = coordsFor(country);
     nodes.push({
-        id:'root', label:companyName, productName:'End Product / Assembly',
-        type:'root', tier:0, country,
-        country_risk_score:countryRisk(country), gpr_score:50, sanctions_flag:false,
-        data_source:'ImportYeti / Zauba', data_source_detail:'US & India Customs Import Records',
-        lat:rootCoords.lat, lng:rootCoords.lng,
+        id: 'root', label: companyName, productName: 'End Product / Assembly',
+        type: 'root', tier: 0, country,
+        country_risk_score: countryRisk(country), gpr_score: 50, sanctions_flag: false,
+        data_source: 'ImportYeti / Zauba', data_source_detail: 'US & India Customs Import Records',
+        lat: rootCoords.lat, lng: rootCoords.lng,
     });
     nodeIds.add('root');
 
@@ -155,17 +155,17 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         nodeIds.add(id); t1i++;
         const c = coordsFor(r.source_country);
         nodes.push({
-            id, label:r.source_name, productName:r.commodity || hsnCodes[0] || 'Component',
-            type:'manufacturer', tier:1, country:r.source_country||'XX',
-            country_risk_score:countryRisk(r.source_country),
-            gpr_score:Math.floor(Math.random()*40)+20, sanctions_flag:false,
-            data_source:r.data_source==='zauba'?'Zauba Customs':'ImportYeti Bill of Lading',
-            data_source_detail:`${r.shipment_count||'N/A'} shipments`,
-            lat:c.lat, lng:c.lng, hsn:r.hs_code_6||'', confidence:r.confidence||'VERIFIED',
+            id, label: r.source_name, productName: r.commodity || hsnCodes[0] || 'Component',
+            type: 'manufacturer', tier: 1, country: r.source_country || 'XX',
+            country_risk_score: countryRisk(r.source_country),
+            gpr_score: Math.floor(Math.random() * 40) + 20, sanctions_flag: false,
+            data_source: r.data_source === 'zauba' ? 'Zauba Customs' : 'ImportYeti Bill of Lading',
+            data_source_detail: `${r.shipment_count || 'N/A'} shipments`,
+            lat: c.lat, lng: c.lng, hsn: r.hs_code_6 || '', confidence: r.confidence || 'VERIFIED',
         });
         edges.push({
-            id:`e_${id}_root`, source:id, target:'root', type:'supplies',
-            hsn:r.hs_code_6||hsnCodes[0]||'', confidence:r.confidence||'VERIFIED',
+            id: `e_${id}_root`, source: id, target: 'root', type: 'supplies',
+            hsn: r.hs_code_6 || hsnCodes[0] || '', confidence: r.confidence || 'VERIFIED',
         });
     }
 
@@ -185,21 +185,21 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         if (nodeIds.has(id)) continue;
         nodeIds.add(id); t2i++;
         const c = coordsFor(srcCountry);
-        const sanctioned = ['CN','RU','IR','KP'].includes(srcCountry);
+        const sanctioned = ['CN', 'RU', 'IR', 'KP'].includes(srcCountry);
         nodes.push({
-            id, label:`${srcCountry} Suppliers`, productName:r.commodity||hsnCodes[0]||'Commodity',
-            type:'distributor', tier:2, country:srcCountry,
-            country_risk_score:countryRisk(srcCountry),
-            gpr_score:Math.floor(Math.random()*50)+20, sanctions_flag:sanctioned,
-            data_source:'UN Comtrade',
-            data_source_detail:`Trade value: $${(r.trade_value/1e6).toFixed(1)}M (2023)`,
-            lat:c.lat, lng:c.lng, hsn:r.hs_code_6||'', confidence:'INFERRED',
+            id, label: `${srcCountry} Suppliers`, productName: r.commodity || hsnCodes[0] || 'Commodity',
+            type: 'distributor', tier: 2, country: srcCountry,
+            country_risk_score: countryRisk(srcCountry),
+            gpr_score: Math.floor(Math.random() * 50) + 20, sanctions_flag: sanctioned,
+            data_source: 'UN Comtrade',
+            data_source_detail: `Trade value: $${(r.trade_value / 1e6).toFixed(1)}M (2023)`,
+            lat: c.lat, lng: c.lng, hsn: r.hs_code_6 || '', confidence: 'INFERRED',
         });
-        const matchingT1 = nodes.find(n => n.tier===1 && n.country===srcCountry);
+        const matchingT1 = nodes.find(n => n.tier === 1 && n.country === srcCountry);
         const target = matchingT1 ? matchingT1.id : 'root';
         edges.push({
-            id:`e_${id}_${target}`, source:id, target, type:'supplies',
-            hsn:r.hs_code_6||hsnCodes[0]||'', confidence:'INFERRED',
+            id: `e_${id}_${target}`, source: id, target, type: 'supplies',
+            hsn: r.hs_code_6 || hsnCodes[0] || '', confidence: 'INFERRED',
         });
     }
 
@@ -221,14 +221,14 @@ async function expandGraphWithLLM(companyName, country, hsnCodes, existingGraph)
     if (hasRealData) {
         const t1Nodes = existingGraph.nodes.filter(n => n.tier === 1);
         const t2Nodes = existingGraph.nodes.filter(n => n.tier === 2);
-        
+
         const missingT1 = t1Nodes.length === 0;
         const missingT2 = t2Nodes.length === 0;
 
         let promptTiers = [];
         if (missingT1) promptTiers.push('- Tier 1: 3 direct suppliers (parent: root)');
         if (missingT2) promptTiers.push('- Tier 2: 3 regional distributors (parent: a Tier 1 id)');
-        
+
         const t2Ids = t2Nodes.map(n => n.id).join(', ');
         const t2Parent = missingT2 ? 'a Tier 2 id' : (t2Ids ? `one of: ${t2Ids}` : 'root');
 
@@ -303,7 +303,7 @@ Return ONLY JSON: {"nodes":[...],"edges":[]}`;
                     const src = allNodes.find(n => n.id === edge.source);
                     const tgt = allNodes.find(n => n.id === edge.target);
                     if (!src || !tgt || src.tier <= tgt.tier) continue;
-                    
+
                     // Does it skip intermediate populated tiers?
                     let hasIntermediate = false;
                     for (let t = src.tier - 1; t > tgt.tier; t--) {
@@ -479,13 +479,13 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     const coords = coordsFor(country);
     return {
         nodes: [{
-            id:'root', label:companyName, productName:'Unknown', type:'root', tier:0, country,
-            country_risk_score:50, gpr_score:50, sanctions_flag:false,
-            data_source:'N/A', data_source_detail:'No data available',
-            lat:coords.lat, lng:coords.lng,
+            id: 'root', label: companyName, productName: 'Unknown', type: 'root', tier: 0, country,
+            country_risk_score: 50, gpr_score: 50, sanctions_flag: false,
+            data_source: 'N/A', data_source_detail: 'No data available',
+            lat: coords.lat, lng: coords.lng,
         }],
         edges: [],
     };
 }
 
-module.exports = { expandGraphWithLLM,  buildSupplyChainGraph };
+module.exports = { expandGraphWithLLM, buildSupplyChainGraph };

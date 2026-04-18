@@ -176,10 +176,13 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
       style={{
         height: '100%',
         overflowY: 'auto',
-        padding: '20px 18px',
+        overflowX: 'hidden',
+        padding: '24px 18px 40px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '14px',
+        gap: '16px',
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'rgba(139,92,246,0.3) transparent',
       }}
     >
       {/* ─── HEADER CARD ─── */}
@@ -190,6 +193,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
         padding: '16px',
         position: 'relative',
         overflow: 'hidden',
+        flexShrink: 0,
       }}>
         {/* Decorative top-right glow */}
         <div style={{
@@ -212,14 +216,36 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
               {node.flag || '🌐'}
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#f1f5f9', fontFamily: 'Sora, sans-serif', lineHeight: 1.2 }}>
+              <div style={{ 
+                fontSize: '18px', 
+                fontWeight: 800, 
+                color: '#f1f5f9', 
+                fontFamily: 'Sora, sans-serif', 
+                lineHeight: 1.2,
+                wordBreak: 'break-word',
+                maxWidth: '220px'
+              }}>
                 {node.label}
               </div>
-              {node.country && (
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>
-                  {node.country}{node.sector ? ` · ${node.sector}` : ''}
-                </div>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                {node.country && (
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>
+                    {node.country}{node.sector ? ` · ${node.sector}` : ''}
+                  </div>
+                )}
+                {node.productName && (
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#38bdf8', 
+                    fontFamily: 'JetBrains Mono, monospace', 
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.02em'
+                  }}>
+                    {node.productName}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {/* Overall risk badge */}
@@ -236,11 +262,6 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
             {overallRisk}
           </div>
         </div>
-        {node.productName && (
-          <div style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'Inter, sans-serif', marginTop: '4px', fontWeight: 500 }}>
-            {node.productName}
-          </div>
-        )}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -277,7 +298,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
           ? node.hsn
           : String(node.hsn).split(',').map(s => s.trim()).filter(Boolean);
         return hsnArray.length > 0 ? (
-          <div>
+          <div style={{ flexShrink: 0 }}>
             <SectionLabel>Trade Codes</SectionLabel>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {hsnArray.map(code => <HSNTag key={code} code={code} size="sm" />)}
@@ -293,6 +314,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
           border: '1px solid rgba(139,92,246,0.15)',
           borderRadius: '12px',
           padding: '14px 16px',
+          flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{ fontSize: '28px', fontWeight: 800, color: '#f1f5f9', fontFamily: 'Sora, sans-serif', lineHeight: 1 }}>
@@ -314,7 +336,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
       )}
 
       {/* ─── RISK ASSESSMENT ─── */}
-      <div>
+      <div style={{ flexShrink: 0 }}>
         <SectionLabel>Risk Assessment</SectionLabel>
         <RiskRow
           label="Sanctions (OFAC)"
@@ -348,6 +370,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
         padding: '14px 16px',
         position: 'relative',
         overflow: 'hidden',
+        flexShrink: 0,
       }}>
         {/* Shimmer line at top */}
         <div style={{
@@ -408,6 +431,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
+        flexShrink: 0,
       }}>
         <div style={{
           width: 32, height: 32, borderRadius: '8px',
@@ -420,16 +444,16 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
         </div>
         <div>
           <div style={{ fontSize: '12px', color: '#cbd5e1', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
-            {node.confidence === 'VERIFIED' ? 'ImportYeti · US Customs' : 'LLM-Inferred (Llama 3)'}
+            {node.data_source || (node.confidence === 'VERIFIED' ? 'ImportYeti · US Customs' : 'LLM-Inferred (Llama 3)')}
           </div>
           <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>
-            {node.confidence === 'VERIFIED' ? 'Bill of Lading records' : 'Not confirmed via trade data'}
+            {node.data_source_detail || (node.confidence === 'VERIFIED' ? 'Bill of Lading records' : 'Not confirmed via trade data')}
           </div>
         </div>
       </div>
 
       {/* ─── ACTIONS ─── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', paddingTop: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', paddingTop: '4px', flexShrink: 0 }}>
         <ShimmerButton onClick={onSimulate} style={{ width: '100%', justifyContent: 'center' }}>
           ⚡ Simulate Disruption
         </ShimmerButton>
