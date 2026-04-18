@@ -25,6 +25,11 @@ async function searchCompany(companyName, countryIso) {
 
     console.log(`[OpenCorp] Searching for "${companyName}" (${countryIso || 'global'})...`);
 
+    if (!config.openCorporatesApiKey) {
+        console.warn(`[OpenCorp] Skipping search for "${companyName}": No API key configured.`);
+        return null;
+    }
+
     try {
         const params = { q: companyName };
 

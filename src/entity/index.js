@@ -5,6 +5,7 @@ const wikidata = require('./wikidata');
 const nominatim = require('./nominatim');
 const llmFallback = require('./llm_fallback');
 const resolver = require('./resolver');
+const summary = require('./summary');
 
 module.exports = {
     opencorporates,
@@ -12,4 +13,5 @@ module.exports = {
     nominatim,
     llmFallback,
     resolver,
+    summary,
 };
