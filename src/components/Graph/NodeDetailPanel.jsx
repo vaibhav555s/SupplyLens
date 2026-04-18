@@ -160,7 +160,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
     )
   }
 
-  const countryRisk = node.countryRisk || 0
+  const countryRisk = node.country_risk_score ?? node.countryRisk ?? 0
   const riskLevel = countryRisk >= 80 ? 'clear' : countryRisk >= 60 ? 'moderate' : 'high'
   const gprLevel = node.country === 'TW' || node.country === 'CN' ? 'elevated' : 'clear'
   const overallRisk = node.sanctions ? 'CRITICAL' : riskLevel === 'high' ? 'HIGH' : riskLevel === 'moderate' ? 'MEDIUM' : 'LOW'
@@ -236,9 +236,17 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
             {overallRisk}
           </div>
         </div>
-
-        {/* Tier + Confidence row */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {node.productName && (
+          <div style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'Inter, sans-serif', marginTop: '4px', fontWeight: 500 }}>
+            {node.productName}
+          </div>
+        )}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginTop: '8px',
+        }}>
           <span style={{
             fontSize: '11px', fontWeight: 700,
             color: '#a855f7',
@@ -316,7 +324,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
         <RiskRow
           label="GPR Index"
           status={gprLevel}
-          detail={gprLevel === 'elevated' ? 'Elevated' : 'Normal'}
+          detail={gprLevel === 'high' ? 'High' : gprLevel === 'elevated' ? 'Elevated' : 'Normal'}
         />
         {node.concentrationRisk && (
           <RiskRow

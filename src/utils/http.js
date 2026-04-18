@@ -130,6 +130,7 @@ async function httpPost(url, data, options = {}) {
                     ...headers,
                 },
                 timeout,
+                validateStatus: (status) => status < 500,
             });
 
             if (response.status === 429) {
