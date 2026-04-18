@@ -10,6 +10,7 @@ const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 const config = require('../config');
 const { importyeti, zauba, comtrade } = require('../connectors');
 const { jsonrepair } = require('jsonrepair');
+const { filterBOM } = require('../logic/bomFilter');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -429,6 +430,24 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
 
     console.log(`[Graph] Building API-first supply chain for "${companyName}" [${hsnString}]...`);
 
+    let keptHsn = [...hsnCodes];
+    let prunedHsn = [];
+
+    // Step 0: BOM Filtering (if enabled)
+    // We filter the discovery-phase HSN codes to ensure downstream expansion is relevant.
+    if (config.bomFilterEnabled && hsnCodes.length > 0) {
+        try {
+            // We need a "parent" HS code to filter against. 
+            // If the root company has multiple HS codes, we pick the most frequent one as the "anchor".
+            const parentAnchor = hsnCodes[0]; 
+            const filterResult = await filterBOM(parentAnchor, hsnCodes);
+            keptHsn = filterResult.kept;
+            prunedHsn = filterResult.pruned;
+        } catch (err) {
+            console.warn(`[Graph] BOM Filter failed: ${err.message}. Procceding without filter.`);
+        }
+    }
+
     // Step 1: Tier 1 from real APIs (parallel)
     const [importYetiRecords, zaubaRecords] = await Promise.all([
         fetchTier1FromImportYeti(companyName),
@@ -439,14 +458,14 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
 
     // Step 2: Tier 2 from Comtrade
     let tier2Records = [];
-    if (hsnCodes.length > 0) {
-        tier2Records = await fetchTier2FromComtrade(country, hsnCodes);
+    if (keptHsn.length > 0) {
+        tier2Records = await fetchTier2FromComtrade(country, keptHsn);
     }
 
     // Step 3: Build API graph skeleton
     let apiGraph = null;
     if (tier1Records.length > 0 || tier2Records.length > 0) {
-        apiGraph = recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCodes);
+        apiGraph = recordsToGraph(companyName, country, tier1Records, tier2Records, keptHsn);
         console.log(`[Graph] API skeleton: ${apiGraph.nodes.length} nodes, ${apiGraph.edges.length} edges.`);
     } else {
         console.warn(`[Graph] No API data — will use pure LLM generation.`);
@@ -456,7 +475,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     let finalGraph = null;
     if (config.groqApiKey) {
         try {
-            finalGraph = await expandGraphWithLLM(companyName, country, hsnCodes, apiGraph);
+            finalGraph = await expandGraphWithLLM(companyName, country, keptHsn, apiGraph);
         } catch (llmErr) {
             console.error(`[Graph] LLM enrichment failed: ${llmErr.message}`);
         }
@@ -464,14 +483,16 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
 
     // Step 5: Return best available result
     if (finalGraph?.nodes?.length > 0) {
-        await cacheSet(cKey, finalGraph, 43200);
-        return finalGraph;
+        const result = { ...finalGraph, pruned: prunedHsn };
+        await cacheSet(cKey, result, 43200);
+        return result;
     }
 
     if (apiGraph?.nodes?.length > 0) {
         console.warn(`[Graph] Using API-only graph (${apiGraph.nodes.length} nodes, no Tiers 3-6).`);
-        await cacheSet(cKey, apiGraph, 21600);
-        return apiGraph;
+        const result = { ...apiGraph, pruned: prunedHsn };
+        await cacheSet(cKey, result, 21600);
+        return result;
     }
 
     // Absolute fallback
