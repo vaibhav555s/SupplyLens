@@ -160,6 +160,21 @@ const CustomNode = memo(({ data, selected }) => {
           </span>
         </div>
 
+        {/* Product Name */}
+        {data.productName && (
+          <div style={{
+            fontSize: '11px',
+            color: '#38bdf8',
+            marginBottom: '4px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            fontFamily: 'JetBrains Mono, monospace'
+          }}>
+            {data.productName}
+          </div>
+        )}
+
         {/* Company name */}
         <div style={{
           fontSize: tierConfig.labelSize,
