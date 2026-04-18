@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check } from 'lucide-react'
@@ -159,8 +159,34 @@ const HSNCard = ({ hsn, selected, onToggle, delay, maxRecords }) => {
 const HSNSelectionPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
+
+  // LIVE DATA coming from the backend entity resolver!
   const companyName = location.state?.company || 'Tesla Inc.'
+  const realEntity = location.state?.entity || null
+
   const [selected, setSelected] = useState(new Set())
+  const [hsnCards, setHsnCards] = useState(mockCompany.hsnCodes)
+  const [isLoadingHsn, setIsLoadingHsn] = useState(false)
+
+  useEffect(() => {
+    if (realEntity) {
+      setIsLoadingHsn(true)
+      const fetchLiveHsn = async () => {
+        try {
+          const api = (await import('../services/api')).default;
+          const data = await api.inferHSNCodes(realEntity.name);
+          if (data.hsnCodes && data.hsnCodes.length > 0) {
+            setHsnCards(data.hsnCodes);
+          }
+        } catch (err) {
+          console.error("Failed to load real-time HSN codes", err);
+        } finally {
+          setIsLoadingHsn(false);
+        }
+      }
+      fetchLiveHsn();
+    }
+  }, [realEntity]);
 
   const toggle = (code) => {
     setSelected(prev => {
@@ -171,11 +197,17 @@ const HSNSelectionPage = () => {
     })
   }
 
-  const maxRecords = Math.max(...mockCompany.hsnCodes.map(h => h.records))
+  const maxRecords = hsnCards.length > 0 ? Math.max(...hsnCards.map(h => h.records)) : 1000;
 
   const handleBeginTraversal = () => {
     const selectedCodes = Array.from(selected)
-    navigate('/graph', { state: { company: companyName, hsnCodes: selectedCodes } })
+    navigate('/graph', {
+      state: {
+        company: companyName,
+        entity: realEntity,
+        hsnCodes: selectedCodes
+      }
+    })
   }
 
   return (
@@ -239,9 +271,27 @@ const HSNSelectionPage = () => {
             color: '#64748b',
             fontSize: '15px',
             fontFamily: 'Inter, sans-serif',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
           }}
         >
-          {mockCompany.hsnCodes.reduce((sum, h) => sum + h.records, 0).toLocaleString()} import records found across {mockCompany.hsnCodes.length} HSN categories
+          {realEntity && (
+            <>
+              <span style={{
+                background: 'rgba(124,58,237,0.1)',
+                color: '#a855f7',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px solid rgba(124,58,237,0.2)'
+              }}>
+                {realEntity.country}
+              </span>
+              <RiskBadge type={realEntity.confidence || 'INFERRED'} size="sm" />
+              <span>•</span>
+            </>
+          )}
+          {isLoadingHsn ? 'AI is analyzing entity import records...' : `${hsnCards.reduce((sum, h) => sum + h.records, 0).toLocaleString()} import records pending verification in ${hsnCards.length} HSN categories`}
         </motion.p>
       </div>
 
@@ -258,16 +308,23 @@ const HSNSelectionPage = () => {
           gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
           gap: '16px',
         }}>
-          {mockCompany.hsnCodes.map((hsn, i) => (
-            <HSNCard
-              key={hsn.code}
-              hsn={hsn}
-              selected={selected.has(hsn.code)}
-              onToggle={() => toggle(hsn.code)}
-              delay={i * 0.06}
-              maxRecords={maxRecords}
-            />
-          ))}
+          {isLoadingHsn ? (
+            <div style={{ padding: '40px', color: '#a855f7', fontFamily: 'Sora, sans-serif', textAlign: 'center' }}>
+              <Check className="animate-spin" style={{ margin: '0 auto 12px' }} size={32} />
+              Generating Dynamic Supply Chain HSN Profile...
+            </div>
+          ) : (
+            hsnCards.map((hsn, i) => (
+              <HSNCard
+                key={hsn.code}
+                hsn={hsn}
+                selected={selected.has(hsn.code)}
+                onToggle={() => toggle(hsn.code)}
+                delay={i * 0.06}
+                maxRecords={maxRecords}
+              />
+            ))
+          )}
         </div>
       </div>
 

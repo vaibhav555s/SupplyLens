@@ -1,0 +1,195 @@
+TABLE 0 ---
+SYN3RGY 3.0 · Open Innovation Track
+Version 2.0  |  Build-Ready Specification
+
+TABLE 1 ---
+WHY | No other team will have a live what-if engine. This is the single highest-impact demo moment.
+
+TABLE 2 ---
+WHY | Judges who understand data will immediately respect honesty about uncertainty. Competing teams show everything as equally 'true.' You show what you know vs. what you infer.
+
+TABLE 3 ---
+WHY | Every competing team will show irrelevant trade flows and pollute their graph. You make the filter transparent — a feature, not a black box.
+
+TABLE 4 ---
+WHY | Most teams re-fetch from scratch every search. Your graph persists and gets smarter. Demo this live: search Apple, then search Samsung — TSMC already resolved at Tier-2.
+
+TABLE 5 ---
+Layer | Responsibility | Key Components
+Input | Accept company name, route to resolution | Search bar UI, entity normaliser
+Tier-0 Resolution | Pull shipment records, surface HSN codes | ImportYeti API, Zauba, graph cache
+Traversal Engine | Recursively trace suppliers tier by tier | BFS orchestrator, BOM filter, HSN normaliser
+Enrichment | Overlay risk signals on every node/edge | Sanctions screener, country risk scorer, concentration detector
+Visualization | Present the graph interactively | Cytoscape.js graph, Leaflet.js geo-map, disruption simulator, dashboard
+
+TABLE 6 ---
+Source | Tier Used | Data Level | What It Provides | Free Limit
+ImportYeti importeyeti.com | T0, T1 | Company | US sea shipment B/L records — shipper name, HSN code, weight, port, date. FOIA-acquired from US CBP 2015–present. | Public + beta API
+UN Comtrade comtradedeveloper.un.org | T2+ | Country | Country-to-country HS-code trade flows. Normalises to 6-digit WCO standard. Essential for cross-border tier hops. | 500 calls/day 100K records/call
+Zauba zauba.com | T0, T1 | Company | India import/export customs data with company names. Covers Indian supplier legs not visible in US records. | ~100 records/run (Apify free tier)
+USITC DataWeb dataweb.usitc.gov | T0 | Commodity | HTS category descriptions, US import/export stats 1997–present. Used to enrich HSN codes with human-readable descriptions. | No key required
+US Census Trade API api.census.gov | T0 | Commodity | HTS codes, country of origin, customs district, value. Note: company names legally prohibited. | 500 req/day
+Mirror Trick (cross-country) | T2+ | Company | When country X doesn't publish exports, check what open-data destination countries import FROM that country — they name the foreign shipper. Recovers ~60-70% of major industrial companies. | Derived from above sources
+
+TABLE 7 ---
+Tier | Question Answered | Primary Source | Data Type | Coverage
+Tier-0 | What does [company] import? What HSN codes? | ImportYeti + Zauba | Company-level | ✅ High — US sea + India legs covered
+Tier-1 | Who ships [HSN code] to [company]? | ImportYeti (shipper field in B/L records) | Company-level | ✅ High — shipper named in US records
+Tier-2 | What does [Tier-1 company] import to produce [product]? | ImportYeti (mirror trick) + UN Comtrade fallback | Company or Country | ⚠️ Medium — ~60-70% company-level via mirror
+Tier-3+ | What supplies [Tier-2 company]? | UN Comtrade (country-level) + LLM inference | Country or Inferred | ⚠️ Low-Medium — country nodes + LLM for known names
+China domestic | Who supplies [Chinese company] within China? | No open data source | ❌ Unavailable | ❌ Show as grey 'Unknown domestic supplier' node
+
+TABLE 8 ---
+Source | Free Tier | Used For
+OpenCorporates API opencorporates.com/api_accounts/new | 500 req/day | Resolve fuzzy company names to legal entities, jurisdictions, officers
+Wikidata SPARQL query.wikidata.org | Unlimited | Large known companies — parent/subsidiary relationships, country of HQ
+ITA / Trade.gov APIs developer.trade.gov | Unlimited (reasonable use) | US export partners, authoritative trade data, consolidated screening list
+LLM inference (Claude API) | Project budget | Fallback for dark nodes — known major suppliers from news/ESG reports. All results marked INFERRED.
+
+TABLE 9 ---
+Source | URL | Signal | Key Required
+OpenSanctions API | opensanctions.org/api | Consolidated OFAC, UN, EU sanctions — 200+ source lists, updated daily. 30-day free trial. | Yes — free signup
+OFAC SDN Bulk XML | treasury.gov/ofac/downloads/sdn.xml | Specially Designated Nationals list. Download as offline cache to avoid rate limits. | No — direct download
+World Bank WGI | api.worldbank.org/v2 | Political stability, rule of law, governance effectiveness per country (0–100 percentile). | No
+GPR Index (Fed Reserve) | matteoiacoviello.com/gpr.htm | Geopolitical risk index for 44 countries — downloadable CSV, data from 1985–present. | No — CSV download
+REST Countries API | restcountries.com/v3.1/all | ISO codes, borders, regions — used for HSN normalisation across countries. | No
+
+TABLE 10 ---
+Country / System | Format | Example (Traction Motor)
+WCO International | 6-digit | 8501.53
+United States (HTS) | 10-digit | 8501.53.4000
+India (HSN) | 8-digit | 8501.5300
+European Union (CN) | 8-digit | 8501 5300
+China (GB) | 10-digit | 8501530090
+
+TABLE 11 ---
+RULE | Always truncate to 6-digit WCO base for cross-country comparison. Expand to national codes only when querying a specific country's customs system. REST Countries API handles ISO code mapping.
+
+TABLE 12 ---
+API | Registration URL | Free Tier | Key Required
+ImportYeti | importyeti.com / data.importyeti.com | Public data + beta API access | Yes — request via site
+UN Comtrade | comtradedeveloper.un.org | 500 calls/day, 100K records/call | Yes — free registration
+OpenCorporates | opencorporates.com/api_accounts/new | 500 req/day | Yes — free registration
+ITA / Trade.gov | developer.trade.gov | Unlimited (reasonable use) | Yes — free registration
+OpenSanctions | opensanctions.org/api | 30-day trial, then self-host yente | Yes — free signup
+World Bank | api.worldbank.org | No limit | No
+OFAC SDN Bulk | treasury.gov/ofac/downloads/sdn.xml | Full dataset | No — direct download
+Nominatim | nominatim.openstreetmap.org | 1 req/sec | No
+REST Countries | restcountries.com/v3.1/all | No limit | No
+
+TABLE 13 ---
+BUILDS | ImportYeti connector · UN Comtrade connector · Zauba connector · USITC description lookup
+
+TABLE 14 ---
+BUILDS | OpenCorporates lookup · Wikidata SPARQL · Nominatim geocoder · LLM inference fallback
+
+TABLE 15 ---
+BUILDS | HS sub-tree analyser · LLM relevance checker · decision cache
+
+TABLE 16 ---
+BUILDS | Neo4j schema · upsert logic · Cypher traversal queries · cache check
+
+TABLE 17 ---
+BUILDS | BFS engine · tier-by-tier coordinator · async job queue · progressive enrichment logic
+
+TABLE 18 ---
+BUILDS | Sanctions screener · country risk scorer · concentration risk detector
+
+TABLE 19 ---
+BUILDS | Cytoscape.js graph · Leaflet geo-map · disruption simulator UI · supplier dashboard
+
+TABLE 20 ---
+Field | Type | Description
+node_id | string | Canonical entity ID (OpenCorporates ID or Wikidata QID)
+name | string | Legal entity name
+country | string | ISO 3166-1 alpha-2 country code
+node_type | enum | COMPANY | COUNTRY (country-level fallback node)
+tier | integer | Tier at which this node was first resolved (0..N)
+hs_codes | string[] | HSN codes associated with this node
+confidence | enum | VERIFIED | INFERRED
+sanctions_flag | boolean | True if matched in OFAC SDN or OpenSanctions
+sanctions_detail | string | Matched list name + entry date
+country_risk_score | float | World Bank WGI political stability percentile (0–100)
+gpr_score | float | GPR Index score for node country
+concentration_risk | boolean | True if this country supplies >60% of an HS code
+disrupted | boolean | Runtime flag for disruption simulation
+lat / lng | float | Geocoded coordinates for geo-map
+last_updated | datetime | When this node was last enriched
+
+TABLE 21 ---
+Field | Type | Description
+source_id | string | Supplier node ID
+target_id | string | Buyer node ID
+hs_code | string | 6-digit HS code for this trade relationship
+commodity | string | Commodity description
+confidence | enum | VERIFIED | INFERRED
+data_source | string | ImportYeti | Zauba | UN_Comtrade | LLM
+shipment_count | integer | Number of shipment records (0 if inferred)
+first_seen | date | Earliest shipment date in records
+last_seen | date | Most recent shipment date in records
+tier | integer | Tier of the target (buyer) node
+at_risk | boolean | Runtime flag for disruption simulation
+
+TABLE 22 ---
+Component | Technology | Purpose
+Framework | React 18 + TypeScript | Component model, state management
+Graph visualization | Cytoscape.js | Interactive supply chain graph with expand/collapse and disruption colouring
+Geo-map | Leaflet.js + D3.js | World map with trade flow arcs and node markers
+Styling | Tailwind CSS | Utility-first styling
+State management | Zustand | Graph state, search history, disruption simulation state, user selections
+
+TABLE 23 ---
+Component | Technology | Purpose
+Runtime | Node.js + Express (or FastAPI) | REST API server
+Graph database | Neo4j Community / Memgraph | Persistent graph store with Cypher queries
+Cache | Redis | API response cache, BOM filter decision cache, OFAC offline cache
+Queue | BullMQ (or Celery) | Async traversal jobs — non-blocking for deep tiers
+LLM client | Anthropic Claude API (claude-sonnet-4-6) | BOM filter, entity inference, dark node resolution
+
+TABLE 24 ---
+Phase | Module | Milestone | Deliverable | Est. Effort
+1 | Module 1 | Data plumbing | ImportYeti + UN Comtrade connectors returning structured data for Tesla test case | 1–2 days
+2 | Module 3+5 | Core traversal | BFS engine with BOM filter running end-to-end Tier-0 to Tier-3 | 2–3 days
+3 | Module 7 | Graph UI | Cytoscape.js graph rendering with expand/collapse, solid/dashed edge styles | 1–2 days
+4 | Module 6 | Enrichment | Sanctions flags + country risk scores on all nodes, concentration alerts | 1 day
+5 | Module 7 | Geo-map | Leaflet world map with trade arcs and risk colour overlay | 1 day
+6 | Module 7 | Disruption sim | Live disruption simulation on graph — re-colouring, risk panel, reset | 1 day
+7 | Module 7 | Dashboard + polish | Saved history, export CSV, UI polish, demo on all 4 sample companies | 1 day
+
+TABLE 25 ---
+Company | HSN to Trace | Expected Tier-1 | Depth to Raw Material
+Tesla Inc. | 8501.53 — AC traction motors | Nidec Corp (Japan), BorgWarner (USA), Denso (Japan) | 6 tiers
+Lucid Group | 8507.60 — lithium-ion battery cells | Samsung SDI (Korea) | 4–5 tiers
+BMW Manufacturing | 8544.30 — vehicle wiring harnesses | Yazaki, Leoni | 3–4 tiers
+General Motors | 8703.23 — passenger motor vehicles | Multiple Mexico / S. Korea assemblers | 4–5 tiers
+
+TABLE 26 ---
+Decision | Choice Made | Why
+Edge confidence model | VERIFIED vs INFERRED (binary, not a score) | Binary is clearer for the user and simpler to maintain; aligns with data source types
+Graph persistence | Neo4j graph database, not relational | Graph queries (find all paths, N-hop traversal) are natural in Cypher; terrible in SQL
+BOM filter | HS sub-tree + LLM binary check (not LLM alone) | Sub-tree is fast, deterministic, cheap; LLM only runs when sub-tree is ambiguous
+Tier-2+ company resolution | Mirror trick before country-level fallback | Maximises verified edges; country nodes are a fallback of last resort, not the default
+Dark nodes (China domestic) | Grey node labelled 'Unknown domestic supplier' | Honest about data gaps; more useful than hiding the node or hallucinating a name
+Stop condition | HS Chapter 01–27 OR depth=6 | Raw commodities have no upstream; depth cap prevents infinite loops on circular trade
+Frontend graph library | Cytoscape.js | Purpose-built for network graphs; handles large node counts; good React integration
+Disruption simulation | Pure graph traversal on existing data (no re-fetch) | Graph already has the data; disruption is just re-colouring — instant, demo-friendly
+BOM filter transparency | Pruned nodes panel in UI (visible, auditable) | Differentiates from teams who silently filter; builds judge confidence
+
+TABLE 27 ---
+Limitation | Scope | Mitigation
+US sea shipments only at Tier-0/1 | ImportYeti covers US sea freight only — air and overland excluded | Layer in Zauba for Indian legs; use mirror trick for other open-data countries
+China domestic transactions invisible | Intra-China trade never crosses a publicly recorded border | Show as grey 'unknown domestic supplier' node; LLM inference can suggest known names
+UN Comtrade 500 calls/day limit | Deep traversals on large companies may hit daily limit | Redis cache all Comtrade responses; batch calls; queue non-urgent traversals
+ImportYeti data latency | ImportYeti data lags US CBP by 3–4 months | Label data with date range; note 'most recent records: MM/YYYY' in UI
+LLM-inferred edges not ground truth | LLM may hallucinate supplier names for unknown companies | All LLM edges marked INFERRED with low-confidence badge; never shown as verified
+~23% of nodes will be country-level | Based on Tesla ground-truth analysis, ~4 of 17 nodes are China-domestic dark spots | Show as grey nodes with HS code + country — honest and still useful for risk assessment
+
+TABLE 28 ---
+Criterion | How the System Addresses It
+Accuracy & depth of supply chain traversal | 6-tier traversal verified against Tesla ground-truth PDF; 77% of nodes resolvable with free open data; dark nodes shown honestly as grey rather than hallucinated
+Relevance filtering | BOM filter at every hop using HS sub-tree + LLM check; pruned nodes visible in collapsible panel — transparent, not a black box
+Graph interactivity & usability | Cytoscape.js with expand/collapse, click-through details, tier toggles, confidence badges, disruption simulation with live re-colouring
+Data integration | 5 trade data sources, 3 entity resolution sources, 4 risk overlay sources — all free tier; source labelled on every edge
+Visualization quality | Dual view: graph (Cytoscape) + geo-map (Leaflet) with trade flow arcs, risk colour coding, concentration risk markers
+Innovation / Bonus Features | Live disruption simulation (USP-1), confidence-layered graph (USP-2), BOM pruning panel (USP-3), progressive enrichment (USP-4), sanctions flags, geopolitical risk overlay, concentration alerts, supplier dashboard with CSV export
+

@@ -132,6 +132,20 @@ app.get('/api/entity/resolve', async (req, res) => {
     }
 });
 
+// Dynamically infer HSN codes for a company
+app.get('/api/entity/hsn-infer', async (req, res) => {
+    try {
+        const { company } = req.query;
+        if (!company) return res.status(400).json({ error: 'Missing company parameter' });
+
+        const { inferCompanyHSNCodes } = require('./entity/hsn_infer');
+        const codes = await inferCompanyHSNCodes(company);
+        res.json({ company, hsnCodes: codes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // OpenCorporates only
 app.get('/api/entity/opencorporates', async (req, res) => {
     try {

@@ -70,6 +70,12 @@ async function httpGet(url, options = {}) {
                 continue;
             }
 
+            if (response.status === 401 || response.status === 403) {
+                const e = new Error(`HTTP ${response.status}: ${url}`);
+                e.isAuthError = true;
+                throw e; // Caught by catch block, but we'll check isAuthError
+            }
+
             if (response.status >= 400) {
                 throw new Error(`HTTP ${response.status}: ${url}`);
             }
@@ -77,6 +83,9 @@ async function httpGet(url, options = {}) {
             return response.data;
         } catch (err) {
             lastError = err;
+            if (err.isAuthError) {
+                break; // Do not retry on 401/403
+            }
             if (attempt < maxRetries) {
                 const delay = config.retry.baseDelay * Math.pow(2, attempt);
                 console.warn(`[HTTP] ${source} attempt ${attempt + 1} failed, retrying in ${delay}ms: ${err.message}`);
@@ -129,9 +138,18 @@ async function httpPost(url, data, options = {}) {
                 continue;
             }
 
+            if (response.status === 401 || response.status === 403) {
+                const e = new Error(`HTTP ${response.status}: ${url}`);
+                e.isAuthError = true;
+                throw e;
+            }
+
             return response.data;
         } catch (err) {
             lastError = err;
+            if (err.isAuthError) {
+                break;
+            }
             if (attempt < maxRetries) {
                 const delay = config.retry.baseDelay * Math.pow(2, attempt);
                 await sleep(delay);

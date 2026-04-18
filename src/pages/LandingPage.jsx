@@ -39,15 +39,37 @@ const StatPill = ({ icon, label, delay }) => (
   </motion.div>
 )
 
+import api from '../services/api'
+
 const LandingPage = () => {
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
+  const [isTracing, setIsTracing] = useState(false)
   const navigate = useNavigate()
 
-  const handleSearch = (q = query) => {
+  const handleSearch = async (q = query) => {
     const term = q.trim()
     if (!term) return
-    navigate('/hsn', { state: { company: term } })
+
+    setIsTracing(true)
+    try {
+      // 1. Hit the backend API to resolve the entity
+      const result = await api.resolveCompany(term)
+
+      // 2. Pass the LIVE data to the next page
+      navigate('/hsn', {
+        state: {
+          company: result.entity?.name || term,
+          entity: result.entity
+        }
+      })
+    } catch (err) {
+      console.error("API Error:", err)
+      // Fallback if API fails
+      navigate('/hsn', { state: { company: term } })
+    } finally {
+      setIsTracing(false)
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -238,7 +260,7 @@ const LandingPage = () => {
               onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
-              Trace Supply Chain →
+              {isTracing ? 'Resolving Entity...' : 'Trace Supply Chain →'}
             </button>
           </div>
         </motion.div>
