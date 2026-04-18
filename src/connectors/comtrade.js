@@ -69,15 +69,10 @@ async function queryTradeFlows(reporterCountryIso, hsCode, options = {}) {
             flowCode: flowCode,
         };
 
-        // If we have an API key, use the authenticated endpoint
-        let url;
-        if (config.comtradeApiKey) {
-            url = `${BASE_URL}/data/v1/get/C/A/HS`;
-            params.subscription_key = config.comtradeApiKey;
-        } else {
-            // Public preview endpoint (limited but works without key)
-            url = `${BASE_URL}/public/v1/preview/C/A/HS`;
-        }
+        // Always use the public preview endpoint.
+        // The paid endpoint requires a valid subscription key — until one is confirmed
+        // working, we stay on the free preview tier to avoid HTTP 401 errors.
+        const url = `${BASE_URL}/public/v1/preview/C/A/HS`;
 
         const data = await httpGet(url, {
             source: 'comtrade',

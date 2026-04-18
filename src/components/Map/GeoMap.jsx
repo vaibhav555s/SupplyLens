@@ -120,11 +120,16 @@ const GeoMap = ({ graphData, visibleTiers, selectedNode, onNodeClick, disruption
                     {node.flag} {node.label}
                   </div>
                   <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>T{node.tier} · {node.confidence}</div>
-                  {node.hsn && (
-                    <div style={{ fontSize: '10px', color: '#a855f7', fontFamily: 'JetBrains Mono, monospace', marginTop: '4px' }}>
-                      {node.hsn.join(' · ')}
-                    </div>
-                  )}
+                  {node.hsn && (() => {
+                    const hsnArr = Array.isArray(node.hsn)
+                      ? node.hsn
+                      : String(node.hsn).split(',').map(s => s.trim()).filter(Boolean);
+                    return hsnArr.length > 0 ? (
+                      <div style={{ fontSize: '10px', color: '#a855f7', fontFamily: 'JetBrains Mono, monospace', marginTop: '4px' }}>
+                        {hsnArr.join(' · ')}
+                      </div>
+                    ) : null;
+                  })()}
                   {node.shipments > 0 && (
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
                       {node.shipments.toLocaleString()} shipments

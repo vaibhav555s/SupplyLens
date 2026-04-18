@@ -212,34 +212,39 @@ const CustomNode = memo(({ data, selected }) => {
           </div>
         )}
 
-        {/* HSN codes */}
-        {data.hsn && data.hsn.length > 0 && (
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '5px',
-            marginBottom: '10px',
-          }}>
-            {data.hsn.slice(0, 3).map(code => (
-              <span
-                key={code}
-                style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  color: '#c084fc',
-                  background: 'rgba(168,85,247,0.12)',
-                  border: '1px solid rgba(168,85,247,0.3)',
-                  borderRadius: '5px',
-                  padding: '2px 7px',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                {code}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* HSN codes — normalize to array (API sends string, LLM sends array) */}
+        {data.hsn && data.hsn.length > 0 && (() => {
+          const hsnArray = Array.isArray(data.hsn)
+            ? data.hsn
+            : String(data.hsn).split(',').map(s => s.trim()).filter(Boolean);
+          return hsnArray.length > 0 ? (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '5px',
+              marginBottom: '10px',
+            }}>
+              {hsnArray.slice(0, 3).map(code => (
+                <span
+                  key={code}
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: '#c084fc',
+                    background: 'rgba(168,85,247,0.12)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    borderRadius: '5px',
+                    padding: '2px 7px',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {code}
+                </span>
+              ))}
+            </div>
+          ) : null;
+        })()}
 
         {/* Risk score bar (if available) */}
         {data.risk_score !== undefined && (
@@ -310,3 +315,4 @@ const CustomNode = memo(({ data, selected }) => {
 CustomNode.displayName = 'CustomNode'
 
 export default CustomNode
+
