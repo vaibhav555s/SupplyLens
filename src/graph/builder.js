@@ -488,4 +488,4 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     };
 }
 
-module.exports = { expandGraphWithLLM, buildSupplyChainGraph };
+module.exports = { expandGraphWithLLM, buildSupplyChainGraph, extractJson };

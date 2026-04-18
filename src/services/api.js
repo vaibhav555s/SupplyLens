@@ -33,6 +33,16 @@ const api = {
     },
 
     /**
+     * Use AI to generate a safe alternative supplier (AI Pivot)
+     */
+    async resourceSupplier(nodeId, hsn, tier, parentId) {
+        const params = new URLSearchParams({ nodeId, hsn: hsn || '', tier: tier || 1, parentId: parentId || 'root' });
+        const response = await fetch(`/api/graph/resource?${params.toString()}`);
+        if (!response.ok) throw new Error('Resource failure');
+        return await response.json();
+    },
+
+    /**
      * Search for shipments (Module 1 - ImportYeti)
      */
     async getShipments(company) {

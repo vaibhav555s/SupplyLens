@@ -158,7 +158,7 @@ const DisruptionModal = ({ node, onClose, onApply }) => {
   )
 }
 
-const DisruptionToast = ({ onReset }) => (
+const DisruptionToast = ({ onReset, onReroute, isResolving }) => (
   <motion.div
     initial={{ x: 100, opacity: 0 }}
     animate={{ x: 0, opacity: 1 }}
@@ -183,25 +183,47 @@ const DisruptionToast = ({ onReset }) => (
       </span>
     </div>
     <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
-      78% of BOM at risk · 3 alternatives found
+      78% of BOM at risk · Action required
     </div>
-    <button
-      onClick={onReset}
-      style={{
-        background: 'rgba(239,68,68,0.1)',
-        border: '1px solid rgba(239,68,68,0.3)',
-        borderRadius: '8px',
-        color: '#ef4444',
-        cursor: 'pointer',
-        padding: '6px 14px',
-        fontSize: '12px',
-        fontFamily: 'Inter, sans-serif',
-        fontWeight: 600,
-        width: '100%',
-      }}
-    >
-      Reset Disruption
-    </button>
+    <div style={{ display: 'flex', gap: '8px' }}>
+      <button
+        onClick={onReroute}
+        disabled={isResolving}
+        style={{
+          flex: 1,
+          background: 'linear-gradient(135deg, #10b981, #059669)',
+          border: '1px solid rgba(16,185,129,0.5)',
+          borderRadius: '8px',
+          color: '#ffffff',
+          cursor: isResolving ? 'wait' : 'pointer',
+          padding: '6px 14px',
+          fontSize: '12px',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 600,
+          opacity: isResolving ? 0.7 : 1,
+        }}
+      >
+        {isResolving ? 'Pivoting...' : '⚡ AI Re-Route'}
+      </button>
+      <button
+        onClick={onReset}
+        disabled={isResolving}
+        style={{
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: '8px',
+          color: '#ef4444',
+          cursor: isResolving ? 'not-allowed' : 'pointer',
+          padding: '6px 10px',
+          fontSize: '12px',
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 600,
+          opacity: isResolving ? 0.5 : 1,
+        }}
+      >
+        Reset
+      </button>
+    </div>
   </motion.div>
 )
 
@@ -257,6 +279,8 @@ const GraphPage = () => {
   const [showModal, setShowModal] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [prunedOpen, setPrunedOpen] = useState(false)
+  const [isResolvingReroute, setIsResolvingReroute] = useState(false)
+  const [resolvedDisruptions, setResolvedDisruptions] = useState([])
 
   const tier0 = graphData.nodes.find(n => n.tier === 0)
   const tier1Count = graphData.nodes.filter(n => n.tier === 1).length
@@ -283,6 +307,58 @@ const GraphPage = () => {
   const handleReset = () => {
     setDisruptions([])
     setShowToast(false)
+  }
+
+  const handleReroute = async () => {
+    if (disruptions.length === 0) return;
+    const nodeId = disruptions[0];
+    const disruptedNode = graphData.nodes.find(n => n.id === nodeId);
+    if (!disruptedNode) return;
+
+    // Find the edge where this node is the source to get its parent and HSN
+    const parentEdge = graphData.edges.find(e => e.source === nodeId);
+    const parentId = parentEdge ? parentEdge.target : 'root';
+    const hsn = parentEdge ? parentEdge.hsn : disruptedNode.hsn;
+
+    setIsResolvingReroute(true);
+    try {
+        const api = (await import('../services/api')).default;
+        const newData = await api.resourceSupplier(nodeId, hsn, disruptedNode.tier, parentId);
+        
+        if (newData && Array.isArray(newData.nodes) && Array.isArray(newData.edges)) {
+            const newNode = newData.nodes[0];
+            const newEdges = [...newData.edges];
+            if (newNode) {
+                // Find downstream children suppliers that currently point to the disrupted node
+                const childrenEdges = graphData.edges.filter(e => e.target === nodeId);
+                childrenEdges.forEach(e => {
+                    newEdges.push({
+                        ...e,
+                        id: `e_reroute_${e.source}_${newNode.id}`,
+                        target: newNode.id,
+                        confidence: 'VERIFIED',
+                        _isNewPivot: true // Marker for neon green styling
+                    });
+                });
+            }
+
+            const taggedNodes = newData.nodes.map(n => ({ ...n, _isNewPivot: true }));
+
+            setGraphData(prev => ({
+                nodes: [...prev.nodes, ...taggedNodes],
+                edges: [...prev.edges, ...newEdges]
+            }));
+            
+            // Mark the disrupted node as permanently bypassed/cancelled
+            setResolvedDisruptions(prev => [...prev, nodeId]);
+            setDisruptions([]);
+            setShowToast(false);
+        }
+    } catch(err) {
+        console.error("AI Reroute failed", err);
+    } finally {
+        setIsResolvingReroute(false);
+    }
   }
 
   const riskCounts = {
@@ -806,6 +882,7 @@ const GraphPage = () => {
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
                   disruptions={disruptions}
+                  resolvedDisruptions={resolvedDisruptions}
                 />
               </motion.div>
             ) : (
@@ -867,7 +944,7 @@ const GraphPage = () => {
       {/* Toast */}
       <AnimatePresence>
         {showToast && (
-          <DisruptionToast onReset={handleReset} />
+          <DisruptionToast onReset={handleReset} onReroute={handleReroute} isResolving={isResolvingReroute} />
         )}
       </AnimatePresence>
     </div>

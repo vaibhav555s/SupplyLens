@@ -87,7 +87,21 @@ const getLayoutedElements = (nodes, edges) => {
   }
 }
 
-const getEdgeStyle = (confidence, isDisrupted) => {
+const getEdgeStyle = (confidence, isDisrupted, isBypassed, isNewPivot) => {
+  if (isNewPivot) {
+    return {
+      style: { stroke: '#10b981', strokeWidth: 3, filter: 'drop-shadow(0 0 6px rgba(16,185,129,0.6))' },
+      animated: true,
+      type: 'smoothstep',
+    }
+  }
+  if (isBypassed) {
+    return {
+      style: { stroke: 'rgba(239,68,68,0.3)', strokeWidth: 1.5, strokeDasharray: '4,4' },
+      animated: false,
+      type: 'smoothstep',
+    }
+  }
   if (isDisrupted) {
     return {
       style: { stroke: 'rgba(239,68,68,0.85)', strokeWidth: 2.5 },
@@ -333,7 +347,7 @@ const FlowInner = ({ layoutedNodes, layoutedEdges, onNodeClick, graphNodeCount }
   )
 }
 
-const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disruptions = [] }) => {
+const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disruptions = [], resolvedDisruptions = [] }) => {
   const rawNodes = useMemo(() => {
     if (!graphData) return []
     return graphData.nodes
@@ -344,12 +358,14 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
         data: {
           ...n,
           disrupted: disruptions.includes(n.id),
-          atRisk: !disruptions.includes(n.id) &&
+          bypassed: resolvedDisruptions.includes(n.id),
+          isNewPivot: !!n._isNewPivot,
+          atRisk: !disruptions.includes(n.id) && !resolvedDisruptions.includes(n.id) &&
             graphData.edges.some(e => disruptions.includes(e.source) && e.target === n.id),
         },
         position: { x: 0, y: 0 },
       }))
-  }, [graphData, visibleTiers, disruptions])
+  }, [graphData, visibleTiers, disruptions, resolvedDisruptions])
 
   const rawEdges = useMemo(() => {
     if (!graphData) return []
@@ -361,7 +377,9 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
       })
       .map(e => {
         const isDisrupted = disruptions.includes(e.source) || disruptions.includes(e.target)
-        const edgeStyle = getEdgeStyle(e.confidence, isDisrupted)
+        const isBypassed = resolvedDisruptions.includes(e.source) || resolvedDisruptions.includes(e.target)
+        const isNewPivot = !!e._isNewPivot
+        const edgeStyle = getEdgeStyle(e.confidence, isDisrupted, isBypassed, isNewPivot)
         return {
           id: e.id || `${e.source}-${e.target}`,
           source: e.source,
@@ -371,12 +389,12 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
             fontFamily: 'JetBrains Mono, monospace',
             fontSize: '11px',
             fontWeight: 700,
-            fill: isDisrupted ? '#ef4444' : e.confidence === 'VERIFIED' ? '#c084fc' : '#94a3b8',
+            fill: isNewPivot ? '#10b981' : isDisrupted ? '#ef4444' : isBypassed ? '#7f1d1d' : e.confidence === 'VERIFIED' ? '#c084fc' : '#94a3b8',
             letterSpacing: '0.04em',
           },
           labelBgStyle: {
             fill: 'rgba(8,8,20,0.92)',
-            stroke: isDisrupted ? 'rgba(239,68,68,0.4)' : e.confidence === 'VERIFIED' ? 'rgba(139,92,246,0.35)' : 'rgba(100,116,139,0.2)',
+            stroke: isNewPivot ? 'rgba(16,185,129,0.4)' : isDisrupted ? 'rgba(239,68,68,0.4)' : isBypassed ? 'rgba(239,68,68,0.1)' : e.confidence === 'VERIFIED' ? 'rgba(139,92,246,0.35)' : 'rgba(100,116,139,0.2)',
             strokeWidth: 1,
           },
           labelBgPadding: [6, 4],
@@ -386,11 +404,11 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
             type: MarkerType.ArrowClosed,
             width: 18,
             height: 18,
-            color: e.confidence === 'VERIFIED' ? 'rgba(168,85,247,0.8)' : isDisrupted ? 'rgba(239,68,68,0.8)' : 'rgba(148,163,184,0.5)',
+            color: isNewPivot ? '#10b981' : isBypassed ? 'rgba(239,68,68,0.2)' : e.confidence === 'VERIFIED' ? 'rgba(168,85,247,0.8)' : isDisrupted ? 'rgba(239,68,68,0.8)' : 'rgba(148,163,184,0.5)',
           },
         }
       })
-  }, [graphData, visibleTiers, disruptions])
+  }, [graphData, visibleTiers, disruptions, resolvedDisruptions])
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
     () => (rawNodes.length > 0 ? getLayoutedElements(rawNodes, rawEdges) : { nodes: [], edges: [] }),
