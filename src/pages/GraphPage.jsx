@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Zap, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
@@ -290,6 +290,51 @@ const GraphPage = () => {
     high: graphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
     clear: graphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
   }
+
+  const concentrationRiskData = useMemo(() => {
+    if (!graphData.nodes || graphData.nodes.length === 0) return []
+    const rootCountry = realEntity?.country || tier0?.country || 'US' // Assume home base exclusion
+    
+    // 1. Group by country
+    const countryCounts = {}
+    let totalAssigned = 0
+    
+    graphData.nodes.forEach(n => {
+      // Exclude root country from concentration risk focus
+      if (n.country && n.country !== rootCountry) {
+        countryCounts[n.country] = (countryCounts[n.country] || 0) + 1
+        totalAssigned++
+      }
+    })
+    
+    if (totalAssigned === 0) return []
+    
+    // 2. Sort & map to percentages
+    const nameMap = {
+      TW: 'Taiwan', CN: 'China', KR: 'South Korea', JP: 'Japan',
+      VN: 'Vietnam', MY: 'Malaysia', IN: 'India', US: 'United States',
+      DE: 'Germany', MX: 'Mexico', BR: 'Brazil', 'CH': 'Switzerland',
+    }
+    
+    const sorted = Object.entries(countryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, count]) => {
+        const pct = Math.round((count / totalAssigned) * 100)
+        let color = '#4ade80'
+        if (pct >= 50) color = '#f87171' // Red for > 50%
+        else if (pct >= 25) color = '#fbbf24' // Yellow for > 25%
+        
+        return {
+          country: nameMap[code] || code,
+          pct,
+          color,
+          count
+        }
+      })
+      
+    // Return top 2 risks
+    return sorted.slice(0, 2)
+  }, [graphData.nodes, realEntity, tier0])
 
   return (
     <div style={{ display: 'flex', height: '100%', background: '#08080f' }}>
@@ -588,10 +633,7 @@ const GraphPage = () => {
               <div style={{ fontSize: '10px', color: '#475569', marginBottom: '10px', fontFamily: 'Inter, sans-serif', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 Concentration Risk
               </div>
-              {[
-                { country: 'Taiwan', pct: 71, color: '#f87171' },
-                { country: 'South Korea', pct: 34, color: '#fbbf24' },
-              ].map(row => (
+              {concentrationRiskData.map(row => (
                 <div key={row.country} style={{ marginBottom: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                     <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>{row.country}</span>
@@ -607,6 +649,11 @@ const GraphPage = () => {
                   </div>
                 </div>
               ))}
+              {concentrationRiskData.length === 0 && (
+                 <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', fontFamily: 'Inter, sans-serif' }}>
+                   Diverse network (no significant concentration outside headquarters)
+                 </div>
+              )}
             </div>
           </div>
 
