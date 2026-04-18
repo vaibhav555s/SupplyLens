@@ -1,6 +1,7 @@
 const { httpPost } = require('../utils/http');
 const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 const config = require('../config');
+const { jsonrepair } = require('jsonrepair');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -23,7 +24,7 @@ async function inferCompanyHSNCodes(companyName) {
     console.log(`[LLM] Inferring real-time HSN codes for "${companyName}"...`);
 
     try {
-        const models = ['llama-3.1-8b-instant', 'llama3-8b-8192', 'mixtral-8x7b-32768'];
+        const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-1b-preview'];
         let lastError;
 
         for (const model of models) {
@@ -62,10 +63,24 @@ async function inferCompanyHSNCodes(companyName) {
                 });
 
                 const text = response?.choices?.[0]?.message?.content || '';
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
-                if (!jsonMatch) throw new Error("Invalid output format");
+                
+                let parsed;
+                try {
+                    // Try clean parse first
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (!jsonMatch) throw new Error("No JSON found");
+                    parsed = JSON.parse(jsonMatch[0]);
+                } catch (e1) {
+                    try {
+                        // Attempt repair if truncated
+                        const start = text.indexOf('{');
+                        if (start === -1) throw new Error("No JSON found");
+                        parsed = JSON.parse(jsonrepair(text.slice(start)));
+                    } catch (e2) {
+                        throw new Error("Invalid output format and repair failed");
+                    }
+                }
 
-                const parsed = JSON.parse(jsonMatch[0]);
                 const result = parsed.hsnCodes || [];
 
                 // Save to cache for 24h
