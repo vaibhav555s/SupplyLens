@@ -6,6 +6,7 @@ import SupplyGraph from '../components/Graph/SupplyGraph'
 import GeoMap from '../components/Map/GeoMap'
 import NodeDetailPanel from '../components/Graph/NodeDetailPanel'
 import ShimmerButton from '../components/UI/ShimmerButton'
+import TerminalLoader from '../components/Graph/TerminalLoader'
 import { mockGraphData, riskAlerts, mockCompany } from '../data/mockData'
 
 const TIERS = [0, 1, 2, 3, 4, 5, 6]
@@ -535,12 +536,16 @@ const GraphPage = () => {
         <div style={{ flex: 1, width: '100%', height: '100%' }}>
           <AnimatePresence mode="wait">
             {isBuildingGraph ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#a855f7', fontFamily: 'Sora, sans-serif' }}>
-                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}>
-                  <Zap size={48} />
-                </motion.div>
-                <h3 style={{ marginTop: '24px', letterSpacing: '0.05em' }}>Plotting Real-Time Global Network...</h3>
-              </div>
+              <motion.div
+                key="terminal"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <TerminalLoader companyName={realEntity?.name || companyName} />
+              </motion.div>
             ) : view === 'graph' ? (
               <motion.div
                 key="graph"
