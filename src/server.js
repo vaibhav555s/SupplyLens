@@ -229,6 +229,19 @@ app.post('/api/entity/batch', async (req, res) => {
     }
 });
 
+// On-demand AI Company Summary
+app.get('/api/entity/summary', async (req, res) => {
+    try {
+        const { company, country } = req.query;
+        if (!company) return res.status(400).json({ error: 'Missing company parameter' });
+
+        const summaryText = await entity.summary.generateCompanySummary(company, country);
+        res.json({ source: 'llm', company, summary: summaryText });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ═══════════════════════════════════════════════
 // HSN Utilities
 // ═══════════════════════════════════════════════

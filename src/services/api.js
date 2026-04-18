@@ -41,12 +41,18 @@ const api = {
         return await response.json();
     },
 
-    /**
-     * Lookup HS Code description (Module 1 - USITC/Comtrade)
-     */
     async lookupHSCode(code) {
         const response = await fetch(`/api/utils/normalize-hs?code=${encodeURIComponent(code)}`);
         if (!response.ok) throw new Error('HS Lookup failed');
+        return await response.json();
+    },
+
+    /**
+     * Get real-time AI summary of a company's operations
+     */
+    async getCompanySummary(company, country = '') {
+        const response = await fetch(`/api/entity/summary?company=${encodeURIComponent(company)}&country=${encodeURIComponent(country)}`);
+        if (!response.ok) throw new Error('Summary fetch failed');
         return await response.json();
     }
 };

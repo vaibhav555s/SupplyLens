@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HSNTag from '../UI/HSNTag'
 import RiskBadge from '../UI/RiskBadge'
 import ShimmerButton from '../UI/ShimmerButton'
+import api from '../../services/api'
 
 const RiskRow = ({ label, status, detail }) => {
   const configs = {
@@ -41,6 +42,26 @@ const RiskRow = ({ label, status, detail }) => {
 }
 
 const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
+  const [summary, setSummary] = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(false)
+
+  useEffect(() => {
+    if (node && node.label) {
+      setLoadingSummary(true)
+      setSummary(null)
+      api.getCompanySummary(node.label, node.country)
+        .then(res => {
+          setSummary(res.summary)
+        })
+        .catch(err => {
+          setSummary("AI insights currently unavailable.")
+        })
+        .finally(() => {
+          setLoadingSummary(false)
+        })
+    }
+  }, [node])
+
   if (!node) {
     return (
       <div style={{
@@ -207,6 +228,51 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
             status="high"
             detail={`HIGH (${node.concentrationRisk}%)`}
           />
+        )}
+      </div>
+
+      {/* AI Intelligence */}
+      <div style={{
+        background: 'rgba(124,58,237,0.05)',
+        border: '1px solid rgba(139,92,246,0.2)',
+        borderRadius: '12px',
+        padding: '14px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <span style={{ fontSize: '14px' }}>✨</span>
+          <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
+            AI Intelligence
+          </span>
+        </div>
+        
+        {loadingSummary ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <motion.div 
+              animate={{ opacity: [0.3, 0.7, 0.3] }} 
+              transition={{ repeat: Infinity, duration: 1.5 }}
+              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '100%' }} 
+            />
+            <motion.div 
+              animate={{ opacity: [0.3, 0.7, 0.3] }} 
+              transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
+              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '85%' }} 
+            />
+            <motion.div 
+              animate={{ opacity: [0.3, 0.7, 0.3] }} 
+              transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }}
+              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '60%' }} 
+            />
+          </div>
+        ) : (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6, fontFamily: 'Inter, sans-serif' }}
+          >
+            {summary}
+          </motion.div>
         )}
       </div>
 
