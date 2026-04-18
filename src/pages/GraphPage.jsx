@@ -299,9 +299,9 @@ const GraphPage = () => {
   }
 
   const riskCounts = {
-    sanctions: graphData.nodes.filter(n => n.sanctions).length,
-    high: graphData.nodes.filter(n => !n.sanctions && n.countryRisk < 60).length,
-    clear: graphData.nodes.filter(n => !n.sanctions && n.countryRisk >= 60).length,
+    sanctions: graphData.nodes.filter(n => n.sanctions_flag).length,
+    high: graphData.nodes.filter(n => !n.sanctions_flag && (n.country_risk_score ?? n.countryRisk) < 60).length,
+    clear: graphData.nodes.filter(n => !n.sanctions_flag && (n.country_risk_score ?? n.countryRisk) >= 60).length,
   }
 
   const concentrationRiskData = useMemo(() => {
@@ -699,7 +699,7 @@ const GraphPage = () => {
                   fontSize: '10px', fontWeight: 700,
                   background: 'rgba(255,255,255,0.08)', borderRadius: '4px',
                   padding: '1px 6px', color: '#64748b',
-                }}>39</span>
+                }}>{graphData.pruned?.length || 0}</span>
               </div>
               <motion.div animate={{ rotate: prunedOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
                 <ChevronRight size={14} />
@@ -715,22 +715,32 @@ const GraphPage = () => {
                   style={{ overflow: 'hidden' }}
                 >
                   <div style={{ padding: '8px 14px 12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '11px', color: '#475569', marginBottom: '10px', fontStyle: 'italic', fontFamily: 'Inter, sans-serif' }}>
-                      Excluded: office supplies, logistics, MRO
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                      {['4901.99', '8473.30', '3926.90', '8516.40', '9403.20'].map(code => (
-                        <span key={code} style={{
-                          fontFamily: 'JetBrains Mono, monospace', fontSize: '10px',
-                          color: '#3f4f62', background: 'rgba(255,255,255,0.03)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          borderRadius: '5px', padding: '2px 7px',
-                        }}>
-                          {code}
-                        </span>
-                      ))}
-                      <span style={{ fontSize: '10px', color: '#334155', fontFamily: 'Inter, sans-serif' }}>+34 more</span>
-                    </div>
+                    {graphData.pruned && graphData.pruned.length > 0 ? (
+                      <>
+                        <div style={{ fontSize: '11px', color: '#475569', marginBottom: '10px', fontStyle: 'italic', fontFamily: 'Inter, sans-serif' }}>
+                          Excluded: office supplies, logistics, MRO
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                          {graphData.pruned.slice(0, 8).map(item => (
+                            <span key={item.hsn} style={{
+                              fontFamily: 'JetBrains Mono, monospace', fontSize: '10px',
+                              color: '#64748b', background: 'rgba(255,255,255,0.03)',
+                              border: '1px solid rgba(255,255,255,0.06)',
+                              borderRadius: '5px', padding: '2px 7px',
+                            }}>
+                              {item.hsn}
+                            </span>
+                          ))}
+                          {graphData.pruned.length > 8 && (
+                            <span style={{ fontSize: '10px', color: '#334155', fontFamily: 'Inter, sans-serif' }}>+{graphData.pruned.length - 8} more</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '11px', color: '#475569', textAlign: 'center', py: '10px' }}>
+                        No nodes were pruned from this graph.
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -862,6 +872,7 @@ const GraphPage = () => {
             onViewMap={() => setView('map')}
             rootCompany={companyName}
             hsnCodes={hsnCodes}
+            prunedNodes={graphData.pruned}
           />
         </AnimatePresence>
       </div>

@@ -4,6 +4,7 @@ require('dotenv').config();
 module.exports = {
   port: parseInt(process.env.PORT, 10) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
+  bomFilterEnabled: process.env.BOM_FILTER_ENABLED !== 'false', // Default to true unless explicitly disabled
 
   // API Keys
   comtradeApiKey: process.env.COMTRADE_API_KEY || '',

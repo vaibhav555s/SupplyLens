@@ -65,7 +65,7 @@ const RiskRow = ({ label, status, detail }) => {
   )
 }
 
-const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes }) => {
+const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, prunedNodes }) => {
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
@@ -163,7 +163,8 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
   const countryRisk = node.country_risk_score ?? node.countryRisk ?? 0
   const riskLevel = countryRisk >= 80 ? 'clear' : countryRisk >= 60 ? 'moderate' : 'high'
   const gprLevel = node.country === 'TW' || node.country === 'CN' ? 'elevated' : 'clear'
-  const overallRisk = node.sanctions ? 'CRITICAL' : riskLevel === 'high' ? 'HIGH' : riskLevel === 'moderate' ? 'MEDIUM' : 'LOW'
+  const isSanctioned = node.sanctions_flag || node.sanctions || false
+  const overallRisk = isSanctioned ? 'CRITICAL' : riskLevel === 'high' ? 'HIGH' : riskLevel === 'moderate' ? 'MEDIUM' : 'LOW'
   const overallRiskColor = overallRisk === 'CRITICAL' || overallRisk === 'HIGH' ? '#f87171' : overallRisk === 'MEDIUM' ? '#fbbf24' : '#4ade80'
 
   return (
@@ -361,6 +362,187 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes })
           />
         )}
       </div>
+ 
+      {/* ─── BOM CLEANSE (NEW) ─── */}
+      {node.tier === 0 && prunedNodes && prunedNodes.length > 0 && (() => {
+        // --- Enhanced Helpers for Demo Intelligence ---
+        const deriveNameFromHS = (hs) => {
+          if (!hs) return 'Industrial Component';
+          const prefix = String(hs).substring(0, 4);
+          const map = {
+            '8542': 'Semiconductor Devices',
+            '8541': 'Discrete Semiconductors',
+            '8534': 'Printed Circuit Boards',
+            '8517': 'Telecommunication Equipment',
+            '8471': 'Computer Processing Units',
+            '8504': 'Power Transmission/Converters',
+            '8473': 'Computing Machine Parts',
+            '3818': 'Electronic Chemical Materials',
+            '2804': 'Industrial Silicon/Gases',
+            '8708': 'Motor Vehicle Components',
+            '8703': 'Automotive Vehicles',
+            '4011': 'Industrial Rubber Tires',
+            '3923': 'Plastic Packing Materials',
+            '4819': 'Paperboard Packaging',
+            '7318': 'Industrial Fasteners',
+            '8414': 'Air/Vacuum Pumps',
+            '8536': 'Electrical Connectors',
+            '8507': 'Electric Batteries',
+            '8544': 'Insulated Wires/Cables',
+            '8419': 'Temperature Change Machinery',
+            '3004': 'Pharmaceutical Medicaments',
+          };
+          return map[prefix] || 'Industrial Component';
+        };
+
+        const getSmartReason = (item, parentHS) => {
+          const reason = item.reason || '';
+          const candidateHS = item.hsn;
+          
+          const getIndustry = (hs) => {
+            if (!hs) return null;
+            const p = String(hs).substring(0, 4);
+            if (['8542', '8541', '3818', '2804'].includes(p)) return 'semiconductors';
+            if (['8708', '8703', '4011'].includes(p)) return 'automotive';
+            if (['3004'].includes(p)) return 'pharmaceuticals';
+            if (['8517', '8471', '8534'].includes(p)) return 'electronics';
+            return null;
+          };
+
+          const pInd = getIndustry(parentHS);
+          const cInd = getIndustry(candidateHS);
+
+          // Priority 1: Cross-industry mismatch
+          if (pInd && cInd && pInd !== cInd) {
+            return `Used in ${cInd}, not ${pInd} manufacturing`;
+          }
+
+          // Priority 2: Extract from LLM reasoning specifically
+          const segment = reason.toLowerCase();
+          if (segment.includes('logistics') || segment.includes('shipping')) return 'General logistics/shipping equipment';
+          if (segment.includes('office') || segment.includes('stationery')) return 'Office supplies (non-production)';
+          if (segment.includes('packaging') && !segment.includes('specialized')) return 'Standard non-specialized packaging';
+          if (segment.includes('safety') || segment.includes('protective')) return 'Safety gear (not a material input)';
+          
+          // Priority 3: Shortest punchy summary from text
+          let summary = reason.replace(/^YES\/NO\s*[|:-]\s*/i, '');
+          const periodIdx = summary.indexOf('.');
+          if (periodIdx > 10) summary = summary.substring(periodIdx + 1).trim();
+          
+          if (summary.length > 55) summary = summary.substring(0, 52) + '...';
+          return summary || 'Not a direct production input';
+        };
+
+        const parentHSN = Array.isArray(node.hsn) ? node.hsn[0] : String(node.hsn || '').split(',')[0].trim();
+
+        return (
+          <div style={{
+            background: 'rgba(74,222,128,0.04)',
+            border: '1px solid rgba(74,222,128,0.15)',
+            borderRadius: '12px',
+            padding: '14px 16px',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px' }}>🛡️</span>
+              <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
+                BOM Cleanser Active
+              </span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6, fontFamily: 'Inter, sans-serif', marginBottom: '16px' }}>
+              Filtered trade flows to exclude <span style={{ color: '#4ade80', fontWeight: 700 }}>{prunedNodes.length}</span> non-material inputs 
+              for higher graph fidelity.
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {prunedNodes.slice(0, 5).map((item, idx) => {
+                const productName = item.name && item.name !== 'Unknown' ? item.name : deriveNameFromHS(item.hsn);
+                const reasonText = getSmartReason(item, parentHSN);
+
+                return (
+                  <div 
+                    key={`${item.hsn}-${idx}`}
+                    style={{ 
+                      padding: '10px 12px',
+                      background: 'rgba(255,255,255,0.02)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '3px',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                      e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ 
+                        fontSize: '9px', 
+                        color: '#4ade80', 
+                        fontWeight: 900, 
+                        letterSpacing: '0.05em',
+                      }}>
+                        HS {item.hsn}
+                      </span>
+                      <div style={{ 
+                        fontSize: '8px', 
+                        padding: '2px 5px',
+                        borderRadius: '4px',
+                        background: 'rgba(248,113,113,0.1)',
+                        color: '#f87171',
+                        fontWeight: 800,
+                        textTransform: 'uppercase'
+                      }}>Pruned</div>
+                    </div>
+                    
+                    <div style={{ 
+                      fontSize: '13px', 
+                      color: '#f8fafc', 
+                      fontWeight: 600,
+                      fontFamily: 'Outfit, sans-serif',
+                    }}>
+                      {productName}
+                    </div>
+                    
+                    <div style={{ 
+                      fontSize: '11px', 
+                      color: '#94a3b8', 
+                      fontFamily: 'Inter, sans-serif',
+                      lineHeight: 1.4,
+                      marginTop: '2px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '6px'
+                    }}>
+                      <span style={{ color: '#ef4444', fontSize: '10px', marginTop: '1px' }}>✕</span>
+                      <span>{reasonText}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {prunedNodes.length > 5 && (
+                <div style={{ 
+                  fontSize: '11px', 
+                  color: '#475569', 
+                  textAlign: 'center', 
+                  padding: '8px 0',
+                  fontWeight: 600,
+                  fontFamily: 'Inter, sans-serif'
+                }}>
+                  + {prunedNodes.length - 5} additional non-material flows cleansed
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ─── AI INTELLIGENCE ─── */}
       <div style={{
