@@ -57,11 +57,100 @@ const api = {
         if (context.hsnCodes?.length) params.set('hsnCodes', context.hsnCodes.join(','));
         if (context.sector) params.set('sector', context.sector);
         if (context.confidence) params.set('confidence', context.confidence);
-        
+
         const response = await fetch(`/api/entity/summary?${params.toString()}`);
         if (!response.ok) throw new Error('Summary fetch failed');
         return await response.json();
-    }
+    },
+
+    // ── Authentication ──
+
+    _token: null,
+
+    setToken(token) {
+        this._token = token;
+    },
+
+    getAuthHeaders() {
+        if (!this._token) throw new Error('No auth token available');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this._token}`
+        };
+    },
+
+    async login(credentials) {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(credentials)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Login failed');
+        return data;
+    },
+
+    async register(userData) {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Registration failed');
+        return data;
+    },
+
+    async getMe() {
+        const response = await fetch('/api/auth/me', {
+            headers: this.getAuthHeaders()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to get user');
+        return data;
+    },
+
+    // ── Dashboard Persistence (MongoDB) ──
+
+    async getDashboardHistory() {
+        const response = await fetch('/api/dashboard/history', {
+            headers: this.getAuthHeaders()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch dashboard history');
+        return data;
+    },
+
+    async saveDashboardEntry({ companyName, country, flag, hsnCodes, graphData }) {
+        const response = await fetch('/api/dashboard/save', {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ companyName, country, flag, hsnCodes, graphData }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to save dashboard entry');
+        return data;
+    },
+
+    async deleteDashboardEntry(id) {
+        const response = await fetch(`/api/dashboard/${id}`, {
+            method: 'DELETE',
+            headers: this.getAuthHeaders()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to delete entry');
+        return data;
+    },
+
+    async clearDashboard() {
+        const response = await fetch('/api/dashboard/clear', {
+            method: 'DELETE',
+            headers: this.getAuthHeaders()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to clear dashboard');
+        return data;
+    },
 };
 
 export default api;

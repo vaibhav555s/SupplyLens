@@ -1,6 +1,8 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { LogOut } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
   { label: 'Search', path: '/' },
@@ -12,6 +14,7 @@ const NAV_ITEMS = [
 const Navbar = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/'
@@ -132,6 +135,49 @@ const Navbar = () => {
           </button>
         )
       })}
+
+      {/* Auth State */}
+      <div style={{
+        width: '1px',
+        height: '20px',
+        background: 'rgba(139, 92, 246, 0.2)',
+        margin: '0 4px',
+      }} />
+
+      {user ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#f8fafc', fontWeight: 600 }}>
+            {user.username}
+          </span>
+          <button
+            onClick={() => { logout(); navigate('/auth'); }}
+            style={{
+              background: 'none', border: 'none', color: '#ef4444',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+              fontFamily: 'Inter, sans-serif', fontSize: '12px', padding: '4px'
+            }}
+          >
+            <LogOut size={14} /> Log out
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => navigate('/auth')}
+          style={{
+            background: 'rgba(124, 58, 237, 0.15)',
+            border: '1px solid rgba(124, 58, 237, 0.3)',
+            borderRadius: '999px',
+            color: '#f8fafc',
+            cursor: 'pointer',
+            padding: '6px 14px',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '13px',
+            fontWeight: 600,
+          }}
+        >
+          Sign In
+        </button>
+      )}
     </motion.nav>
   )
 }

@@ -237,6 +237,19 @@ const GraphPage = () => {
           }
           setGraphData(generatedGraph)
           setIsBuildingGraph(false)
+
+          // Auto-save to dashboard via MongoDB API
+          try {
+            await api.saveDashboardEntry({
+              companyName: rootCompany,
+              country,
+              flag: realEntity?.flag || '🏢',
+              hsnCodes: codes,
+              graphData: generatedGraph,
+            })
+          } catch (e) {
+            console.warn('[Dashboard] Failed to save search:', e)
+          }
         }
       } catch (err) {
         console.error("Failed to build dynamic graph:", err)
@@ -294,11 +307,11 @@ const GraphPage = () => {
   const concentrationRiskData = useMemo(() => {
     if (!graphData.nodes || graphData.nodes.length === 0) return []
     const rootCountry = realEntity?.country || tier0?.country || 'US' // Assume home base exclusion
-    
+
     // 1. Group by country
     const countryCounts = {}
     let totalAssigned = 0
-    
+
     graphData.nodes.forEach(n => {
       // Exclude root country from concentration risk focus
       if (n.country && n.country !== rootCountry) {
@@ -306,16 +319,16 @@ const GraphPage = () => {
         totalAssigned++
       }
     })
-    
+
     if (totalAssigned === 0) return []
-    
+
     // 2. Sort & map to percentages
     const nameMap = {
       TW: 'Taiwan', CN: 'China', KR: 'South Korea', JP: 'Japan',
       VN: 'Vietnam', MY: 'Malaysia', IN: 'India', US: 'United States',
       DE: 'Germany', MX: 'Mexico', BR: 'Brazil', 'CH': 'Switzerland',
     }
-    
+
     const sorted = Object.entries(countryCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([code, count]) => {
@@ -323,7 +336,7 @@ const GraphPage = () => {
         let color = '#4ade80'
         if (pct >= 50) color = '#f87171' // Red for > 50%
         else if (pct >= 25) color = '#fbbf24' // Yellow for > 25%
-        
+
         return {
           country: nameMap[code] || code,
           pct,
@@ -331,7 +344,7 @@ const GraphPage = () => {
           count
         }
       })
-      
+
     // Return top 2 risks
     return sorted.slice(0, 2)
   }, [graphData.nodes, realEntity, tier0])
@@ -650,9 +663,9 @@ const GraphPage = () => {
                 </div>
               ))}
               {concentrationRiskData.length === 0 && (
-                 <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', fontFamily: 'Inter, sans-serif' }}>
-                   Diverse network (no significant concentration outside headquarters)
-                 </div>
+                <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', fontFamily: 'Inter, sans-serif' }}>
+                  Diverse network (no significant concentration outside headquarters)
+                </div>
               )}
             </div>
           </div>

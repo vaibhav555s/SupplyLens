@@ -5,6 +5,10 @@ const express = require('express');
 const config = require('./config');
 const connectors = require('./connectors');
 const entity = require('./entity');
+const { connectDB, isDBConnected } = require('./db/connection');
+const authMiddleware = require('./middleware/auth');
+const User = require('./db/models/User');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(express.json());
@@ -269,13 +273,175 @@ app.get('/api/utils/normalize-hs', (req, res) => {
     });
 });
 
+// ═══════════════════════════════════════════════
+// MODULE 6 — Authentication
+// ═══════════════════════════════════════════════
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const { username, email, password } = req.body;
+
+        if (!username || !email || !password) {
+            return res.status(400).json({ error: 'Please provide username, email, and password' });
+        }
+
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username or email already exists' });
+        }
+
+        const user = new User({ username, email, password });
+        await user.save();
+
+        const token = jwt.sign({ userId: user._id }, config.jwtSecret, { expiresIn: '7d' });
+        res.json({ user, token });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Please provide email and password' });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user || !(await user.comparePassword(password))) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ userId: user._id }, config.jwtSecret, { expiresIn: '7d' });
+        res.json({ user, token });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const user = await User.findById(req.userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json({ user });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════
+// MODULE 4 — Dashboard Persistence (MongoDB)
+// ═══════════════════════════════════════════════
+
+// Get all saved searches for the authenticated user
+app.get('/api/dashboard/history', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.json([]);
+        const SearchHistory = require('./db/models/SearchHistory');
+        const history = await SearchHistory.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(50).lean();
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Save a new search entry for the authenticated user
+app.post('/api/dashboard/save', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const SearchHistory = require('./db/models/SearchHistory');
+        const { companyName, country, flag, hsnCodes, graphData } = req.body;
+
+        if (!companyName) return res.status(400).json({ error: 'Missing companyName' });
+
+        // Extract Tier-1 suppliers
+        const allNodes = graphData?.nodes || [];
+        const tier1Suppliers = allNodes
+            .filter(n => n.tier === 1)
+            .map(n => ({ label: n.label, country: n.country, type: n.type, risk_score: n.risk_score }));
+
+        // Compute risk flags
+        const sanctions = allNodes.filter(n => n.sanctions === true).length;
+        const highRisk = allNodes.filter(n => !n.sanctions && (n.risk_score || 0) > 70).length;
+        const clear = allNodes.filter(n => !n.sanctions && (n.risk_score || 0) <= 70).length;
+
+        // Concentration risk
+        const countryCounts = {};
+        allNodes.filter(n => n.tier > 0).forEach(n => {
+            if (n.country) countryCounts[n.country] = (countryCounts[n.country] || 0) + 1;
+        });
+        const totalSuppliers = allNodes.filter(n => n.tier > 0).length;
+        let concentrationRisk = null;
+        if (totalSuppliers > 0) {
+            const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0];
+            if (topCountry) {
+                const pct = Math.round((topCountry[1] / totalSuppliers) * 100);
+                if (pct > 25) concentrationRisk = { country: topCountry[0], percentage: pct };
+            }
+        }
+
+        const maxTier = Math.max(...allNodes.map(n => n.tier || 0), 0);
+
+        // Upsert: update if same company exists for THIS user, otherwise create
+        const entry = await SearchHistory.findOneAndUpdate(
+            { companyName: { $regex: new RegExp(`^${companyName}$`, 'i') }, userId: req.userId },
+            {
+                userId: req.userId, companyName, country: country || 'US', flag: flag || '🏢',
+                hsnCodes: hsnCodes || [], tier1Suppliers, tier1Count: tier1Suppliers.length,
+                totalNodes: allNodes.length, maxTier,
+                riskFlags: { sanctions, highRisk, clear },
+                concentrationRisk,
+            },
+            { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+        );
+
+        console.log(`[Dashboard] Saved search for user ${req.userId}: "${companyName}" (${tier1Suppliers.length} T1 suppliers)`);
+        res.json(entry);
+    } catch (err) {
+        console.error('[Dashboard] Save error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete a single entry for the authenticated user
+app.delete('/api/dashboard/:id', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const SearchHistory = require('./db/models/SearchHistory');
+        await SearchHistory.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Clear all history for the authenticated user
+app.delete('/api/dashboard/clear', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const SearchHistory = require('./db/models/SearchHistory');
+        await SearchHistory.deleteMany({ userId: req.userId });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── Start Server ───
-app.listen(config.port, () => {
+app.listen(config.port, async () => {
+    // Connect to MongoDB
+    await connectDB();
+
     console.log(`
   ⬡ Supply Chain X-Ray API Server
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:     ${config.port}
   Env:      ${config.nodeEnv}
+  MongoDB:  ${isDBConnected() ? '✓ Connected' : '✗ Not configured'}
 
   Module 1 — Data Connectors:
     GET /api/connectors/importyeti?company=Tesla
@@ -289,6 +455,12 @@ app.listen(config.port, () => {
     GET /api/entity/wikidata?name=Samsung
     GET /api/entity/geocode?query=Tokyo,Japan
     POST /api/entity/batch
+
+  Module 4 — Dashboard:
+    GET  /api/dashboard/history
+    POST /api/dashboard/save
+    DEL  /api/dashboard/:id
+    DEL  /api/dashboard/clear
 
   Utilities:
     GET /api/utils/normalize-hs?code=8501.53.4000

@@ -40,12 +40,14 @@ const StatPill = ({ icon, label, delay }) => (
 )
 
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const LandingPage = () => {
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
   const [isTracing, setIsTracing] = useState(false)
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const handleSearch = async (q = query) => {
     const term = q.trim()
@@ -229,7 +231,9 @@ const LandingPage = () => {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onKeyDown={handleKeyDown}
-              placeholder="Enter company name — e.g. Tesla, Apple, Samsung..."
+              onClick={() => { if (!user) navigate('/auth') }}
+              readOnly={!user}
+              placeholder={user ? "Enter company name — e.g. Tesla, Apple, Samsung..." : "Sign in to trace supply chains"}
               style={{
                 flex: 1,
                 background: 'none',
@@ -238,11 +242,12 @@ const LandingPage = () => {
                 color: '#f8fafc',
                 fontSize: '15px',
                 fontFamily: 'Inter, sans-serif',
+                cursor: !user ? 'pointer' : 'text',
                 '::placeholder': { color: '#475569' },
               }}
             />
             <button
-              onClick={() => handleSearch()}
+              onClick={() => { if (!user) navigate('/auth'); else handleSearch(); }}
               style={{
                 background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
                 border: 'none',
@@ -260,7 +265,7 @@ const LandingPage = () => {
               onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
-              {isTracing ? 'Resolving Entity...' : 'Trace Supply Chain →'}
+              {!user ? 'Sign In to Search' : isTracing ? 'Resolving Entity...' : 'Trace Supply Chain →'}
             </button>
           </div>
         </motion.div>
@@ -301,7 +306,7 @@ const LandingPage = () => {
           {recentSearches.map(name => (
             <button
               key={name}
-              onClick={() => handleSearch(name)}
+              onClick={() => { if (!user) navigate('/auth'); else handleSearch(name); }}
               style={{
                 background: 'none',
                 border: '1px solid rgba(255,255,255,0.08)',
