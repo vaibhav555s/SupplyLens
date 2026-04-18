@@ -19,11 +19,11 @@ const nodeTypes = { custom: CustomNode }
 const getLayoutedElements = (nodes, edges) => {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 })
+  g.setGraph({ rankdir: 'TB', nodesep: 100, ranksep: 160, marginx: 60, marginy: 60 })
 
   nodes.forEach((node) => {
-    const width = node.data.tier === 0 ? 220 : node.data.tier === 1 ? 180 : 170
-    g.setNode(node.id, { width, height: 140 })
+    const width = node.data.tier === 0 ? 240 : node.data.tier === 1 ? 200 : node.data.tier === 2 ? 188 : 178
+    g.setNode(node.id, { width, height: 160 })
   })
 
   edges.forEach((edge) => {
@@ -38,8 +38,8 @@ const getLayoutedElements = (nodes, edges) => {
       return {
         ...node,
         position: {
-          x: nodeWithPosition.x - (node.data.tier === 0 ? 110 : 90),
-          y: nodeWithPosition.y - 70,
+          x: nodeWithPosition.x - (node.data.tier === 0 ? 120 : node.data.tier === 1 ? 100 : node.data.tier === 2 ? 94 : 89),
+          y: nodeWithPosition.y - 80,
         },
       }
     }),
@@ -50,7 +50,7 @@ const getLayoutedElements = (nodes, edges) => {
 const getEdgeStyle = (confidence, isDisrupted) => {
   if (isDisrupted) {
     return {
-      style: { stroke: 'rgba(239,68,68,0.7)', strokeWidth: 2 },
+      style: { stroke: 'rgba(239,68,68,0.85)', strokeWidth: 2.5 },
       animated: true,
       type: 'smoothstep',
     }
@@ -58,19 +58,19 @@ const getEdgeStyle = (confidence, isDisrupted) => {
   switch (confidence) {
     case 'VERIFIED':
       return {
-        style: { stroke: 'rgba(139, 92, 246, 0.6)', strokeWidth: 2 },
+        style: { stroke: 'rgba(139, 92, 246, 0.8)', strokeWidth: 2.5 },
         animated: true,
         type: 'smoothstep',
       }
     case 'INFERRED':
       return {
-        style: { stroke: 'rgba(100, 116, 139, 0.4)', strokeWidth: 1.5, strokeDasharray: '5,5' },
+        style: { stroke: 'rgba(148, 163, 184, 0.55)', strokeWidth: 1.8, strokeDasharray: '6,5' },
         animated: false,
         type: 'smoothstep',
       }
     default:
       return {
-        style: { stroke: 'rgba(100, 116, 139, 0.3)', strokeWidth: 1, strokeDasharray: '2,4' },
+        style: { stroke: 'rgba(100, 116, 139, 0.45)', strokeWidth: 1.5, strokeDasharray: '3,5' },
         animated: false,
         type: 'smoothstep',
       }
@@ -255,17 +255,27 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
           id: e.id || `${e.source}-${e.target}`,
           source: e.source,
           target: e.target,
-          label: e.hsn,
+          label: e.hsn || '',
           labelStyle: {
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '9px',
-            fill: '#7c3aed',
+            fontSize: '11px',
+            fontWeight: 700,
+            fill: isDisrupted ? '#ef4444' : e.confidence === 'VERIFIED' ? '#c084fc' : '#94a3b8',
+            letterSpacing: '0.04em',
           },
-          labelBgStyle: { fill: 'rgba(8,8,15,0.8)' },
+          labelBgStyle: {
+            fill: 'rgba(8,8,20,0.92)',
+            stroke: isDisrupted ? 'rgba(239,68,68,0.4)' : e.confidence === 'VERIFIED' ? 'rgba(139,92,246,0.35)' : 'rgba(100,116,139,0.2)',
+            strokeWidth: 1,
+          },
+          labelBgPadding: [6, 4],
+          labelBgBorderRadius: 5,
           ...edgeStyle,
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: e.confidence === 'VERIFIED' ? 'rgba(139,92,246,0.6)' : 'rgba(100,116,139,0.4)',
+            width: 18,
+            height: 18,
+            color: e.confidence === 'VERIFIED' ? 'rgba(168,85,247,0.8)' : isDisrupted ? 'rgba(239,68,68,0.8)' : 'rgba(148,163,184,0.5)',
           },
         }
       })
