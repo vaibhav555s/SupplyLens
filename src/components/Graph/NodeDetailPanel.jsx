@@ -1,16 +1,35 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HSNTag from '../UI/HSNTag'
-import RiskBadge from '../UI/RiskBadge'
 import ShimmerButton from '../UI/ShimmerButton'
 import api from '../../services/api'
 
+// Section header helper
+const SectionLabel = ({ children }) => (
+  <div style={{
+    fontSize: '10px',
+    fontWeight: 800,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: '#475569',
+    marginBottom: '10px',
+    fontFamily: 'Inter, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  }}>
+    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+    {children}
+    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+  </div>
+)
+
 const RiskRow = ({ label, status, detail }) => {
   const configs = {
-    clear: { icon: '✓', color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.2)' },
-    moderate: { icon: '⚠', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.2)' },
-    high: { icon: '⚡', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' },
-    elevated: { icon: '⚠', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.2)' },
+    clear: { icon: '✓', color: '#4ade80', bg: 'rgba(74,222,128,0.1)', border: 'rgba(74,222,128,0.25)', textColor: '#4ade80' },
+    moderate: { icon: '◈', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)', textColor: '#fbbf24' },
+    high: { icon: '⚡', color: '#f87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.25)', textColor: '#f87171' },
+    elevated: { icon: '▲', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)', textColor: '#fbbf24' },
   }
   const cfg = configs[status?.toLowerCase()] || configs.clear
 
@@ -19,23 +38,28 @@ const RiskRow = ({ label, status, detail }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '8px 0',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
+      padding: '9px 12px',
+      borderRadius: '8px',
+      background: 'rgba(255,255,255,0.025)',
+      marginBottom: '6px',
+      border: '1px solid rgba(255,255,255,0.05)',
     }}>
       <span style={{ fontSize: '12px', color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>{label}</span>
       <span style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '4px',
+        gap: '5px',
         fontSize: '11px',
-        fontWeight: 600,
+        fontWeight: 700,
         color: cfg.color,
         background: cfg.bg,
         border: `1px solid ${cfg.border}`,
-        borderRadius: '999px',
-        padding: '2px 8px',
+        borderRadius: '6px',
+        padding: '3px 10px',
+        letterSpacing: '0.04em',
       }}>
-        {cfg.icon} {detail || status}
+        <span style={{ fontSize: '10px' }}>{cfg.icon}</span>
+        {detail || status}
       </span>
     </div>
   )
@@ -50,15 +74,9 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
       setLoadingSummary(true)
       setSummary(null)
       api.getCompanySummary(node.label, node.country)
-        .then(res => {
-          setSummary(res.summary)
-        })
-        .catch(err => {
-          setSummary("AI insights currently unavailable.")
-        })
-        .finally(() => {
-          setLoadingSummary(false)
-        })
+        .then(res => { setSummary(res.summary) })
+        .catch(() => { setSummary("AI insights currently unavailable.") })
+        .finally(() => { setLoadingSummary(false) })
     }
   }, [node])
 
@@ -70,30 +88,67 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '24px',
-        gap: '16px',
+        padding: '32px 24px',
+        gap: '20px',
       }}>
-        <div style={{
-          width: '64px',
-          height: '64px',
-          borderRadius: '50%',
-          background: 'rgba(124,58,237,0.08)',
-          border: '1px solid rgba(139,92,246,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '28px',
-          opacity: 0.5,
-        }}>
-          ◈
+        {/* Animated idle state */}
+        <div style={{ position: 'relative' }}>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 12, ease: 'linear' }}
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: '50%',
+              border: '1px solid rgba(139,92,246,0.2)',
+              position: 'absolute',
+              inset: -8,
+            }}
+          />
+          <motion.div
+            animate={{ rotate: -360 }}
+            transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              border: '1px dashed rgba(139,92,246,0.15)',
+              position: 'absolute',
+              inset: 0,
+            }}
+          />
+          <div style={{
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'rgba(124,58,237,0.08)',
+            border: '1px solid rgba(139,92,246,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '22px',
+          }}>
+            ◈
+          </div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '14px', color: '#475569', marginBottom: '8px', fontFamily: 'Sora, sans-serif' }}>
-            Select a node to inspect
+          <div style={{ fontSize: '15px', color: '#64748b', marginBottom: '8px', fontFamily: 'Sora, sans-serif', fontWeight: 600 }}>
+            No node selected
           </div>
-          <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.6, fontFamily: 'Inter, sans-serif' }}>
-            Click any supplier node to view<br />trade details and risk assessment
+          <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.7, fontFamily: 'Inter, sans-serif' }}>
+            Click any supplier node<br />to inspect its intelligence profile
           </div>
+        </div>
+        {/* Decorative grid lines */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', opacity: 0.3 }}>
+          {[90, 70, 85, 55, 75].map((w, i) => (
+            <motion.div
+              key={i}
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              transition={{ repeat: Infinity, duration: 2.5, delay: i * 0.3 }}
+              style={{ height: '4px', width: `${w}%`, background: 'rgba(139,92,246,0.3)', borderRadius: '2px', margin: '0 auto' }}
+            />
+          ))}
         </div>
       </div>
     )
@@ -102,113 +157,148 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
   const countryRisk = node.countryRisk || 0
   const riskLevel = countryRisk >= 80 ? 'clear' : countryRisk >= 60 ? 'moderate' : 'high'
   const gprLevel = node.country === 'TW' || node.country === 'CN' ? 'elevated' : 'clear'
+  const overallRisk = node.sanctions ? 'CRITICAL' : riskLevel === 'high' ? 'HIGH' : riskLevel === 'moderate' ? 'MEDIUM' : 'LOW'
+  const overallRiskColor = overallRisk === 'CRITICAL' || overallRisk === 'HIGH' ? '#f87171' : overallRisk === 'MEDIUM' ? '#fbbf24' : '#4ade80'
 
   return (
     <motion.div
       key={node.id}
-      initial={{ x: 60, opacity: 0 }}
+      initial={{ x: 50, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 60, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      exit={{ x: 50, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 28 }}
       style={{
         height: '100%',
         overflowY: 'auto',
-        padding: '20px',
+        padding: '20px 18px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '14px',
       }}
     >
-      {/* Header */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '24px' }}>{node.flag || '🌐'}</span>
-          <RiskBadge type={node.confidence} />
-        </div>
+      {/* ─── HEADER CARD ─── */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(139,92,246,0.05))',
+        border: '1px solid rgba(139,92,246,0.25)',
+        borderRadius: '16px',
+        padding: '16px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Decorative top-right glow */}
         <div style={{
-          fontFamily: 'Sora, sans-serif',
-          fontSize: '20px',
-          fontWeight: 700,
-          color: '#f8fafc',
-          lineHeight: 1.2,
-          marginBottom: '4px',
-        }}>
-          {node.label}
+          position: 'absolute', top: -20, right: -20,
+          width: 80, height: 80, borderRadius: '50%',
+          background: `rgba(${overallRisk === 'CRITICAL' || overallRisk === 'HIGH' ? '239,68,68' : '124,58,237'},0.15)`,
+          filter: 'blur(20px)',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: 42, height: 42, borderRadius: '12px',
+              background: 'rgba(124,58,237,0.2)',
+              border: '1.5px solid rgba(139,92,246,0.35)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '20px',
+            }}>
+              {node.flag || '🌐'}
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#f1f5f9', fontFamily: 'Sora, sans-serif', lineHeight: 1.2 }}>
+                {node.label}
+              </div>
+              {node.country && (
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>
+                  {node.country}{node.sector ? ` · ${node.sector}` : ''}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Overall risk badge */}
+          <div style={{
+            fontSize: '10px', fontWeight: 800,
+            color: overallRiskColor,
+            background: `rgba(${overallRisk === 'CRITICAL' || overallRisk === 'HIGH' ? '248,113,113' : overallRisk === 'MEDIUM' ? '251,191,36' : '74,222,128'},0.1)`,
+            border: `1px solid ${overallRiskColor}50`,
+            borderRadius: '6px',
+            padding: '3px 8px',
+            letterSpacing: '0.1em',
+            flexShrink: 0,
+          }}>
+            {overallRisk}
+          </div>
         </div>
-        <div style={{ fontSize: '12px', color: '#64748b', fontFamily: 'Inter, sans-serif' }}>
-          {node.fullName}
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          marginTop: '8px',
-        }}>
+
+        {/* Tier + Confidence row */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: '#7c3aed',
-            background: 'rgba(124,58,237,0.12)',
-            borderRadius: '4px',
-            padding: '2px 8px',
-          }}>TIER {node.tier}</span>
-          {node.sector && (
-            <span style={{ fontSize: '11px', color: '#64748b' }}>· {node.sector}</span>
-          )}
+            fontSize: '11px', fontWeight: 700,
+            color: '#a855f7',
+            background: 'rgba(168,85,247,0.15)',
+            border: '1px solid rgba(168,85,247,0.3)',
+            borderRadius: '6px',
+            padding: '3px 10px',
+            letterSpacing: '0.04em',
+          }}>
+            TIER {node.tier}
+          </span>
+          <span style={{
+            fontSize: '11px', fontWeight: 700,
+            color: node.confidence === 'VERIFIED' ? '#4ade80' : '#94a3b8',
+            background: node.confidence === 'VERIFIED' ? 'rgba(74,222,128,0.1)' : 'rgba(148,163,184,0.08)',
+            border: `1px solid ${node.confidence === 'VERIFIED' ? 'rgba(74,222,128,0.3)' : 'rgba(148,163,184,0.2)'}`,
+            borderRadius: '6px',
+            padding: '3px 10px',
+          }}>
+            {node.confidence === 'VERIFIED' ? '✓ VERIFIED' : '~ INFERRED'}
+          </span>
         </div>
       </div>
 
-      <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)' }} />
-
-      {/* HSN Codes */}
+      {/* ─── HSN CODES ─── */}
       {node.hsn && node.hsn.length > 0 && (
         <div>
-          <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-            HSN Codes
-          </div>
+          <SectionLabel>Trade Codes</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {node.hsn.map(code => <HSNTag key={code} code={code} size="sm" />)}
           </div>
         </div>
       )}
 
-      {/* Trade Volume */}
+      {/* ─── TRADE VOLUME ─── */}
       {(node.shipments > 0 || node.value) && (
-        <div
-          style={{
-            background: 'rgba(124,58,237,0.06)',
-            border: '1px solid rgba(139,92,246,0.12)',
-            borderRadius: '12px',
-            padding: '14px',
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-            Trade Volume
-          </div>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: '#f8fafc', fontFamily: 'Sora, sans-serif', lineHeight: 1 }}>
-            {node.shipments > 0 ? node.shipments.toLocaleString() : '—'}
-            <span style={{ fontSize: '13px', fontWeight: 400, color: '#94a3b8', marginLeft: '6px' }}>shipments</span>
+        <div style={{
+          background: 'rgba(124,58,237,0.06)',
+          border: '1px solid rgba(139,92,246,0.15)',
+          borderRadius: '12px',
+          padding: '14px 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontSize: '28px', fontWeight: 800, color: '#f1f5f9', fontFamily: 'Sora, sans-serif', lineHeight: 1 }}>
+              {node.shipments > 0 ? node.shipments.toLocaleString() : '—'}
+            </span>
+            <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'Inter, sans-serif' }}>shipments</span>
           </div>
           {node.value && (
-            <div style={{ fontSize: '16px', color: '#a855f7', fontFamily: 'JetBrains Mono, monospace', marginTop: '4px' }}>
+            <div style={{ fontSize: '15px', color: '#a855f7', fontFamily: 'JetBrains Mono, monospace', marginTop: '4px', fontWeight: 700 }}>
               ${node.value}
             </div>
           )}
           {node.firstSeen && (
-            <div style={{ fontSize: '11px', color: '#475569', marginTop: '8px' }}>
+            <div style={{ fontSize: '11px', color: '#475569', marginTop: '8px', fontFamily: 'Inter, sans-serif' }}>
               {node.firstSeen} → {node.lastSeen}
             </div>
           )}
         </div>
       )}
 
-      {/* Risk Assessment */}
+      {/* ─── RISK ASSESSMENT ─── */}
       <div>
-        <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-          Risk Assessment
-        </div>
+        <SectionLabel>Risk Assessment</SectionLabel>
         <RiskRow
-          label="Sanctions"
+          label="Sanctions (OFAC)"
           status={node.sanctions ? 'high' : 'clear'}
           detail={node.sanctions ? 'MATCH FOUND' : 'Clear'}
         />
@@ -231,82 +321,100 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
         )}
       </div>
 
-      {/* AI Intelligence */}
+      {/* ─── AI INTELLIGENCE ─── */}
       <div style={{
-        background: 'rgba(124,58,237,0.05)',
-        border: '1px solid rgba(139,92,246,0.2)',
-        borderRadius: '12px',
-        padding: '14px',
+        background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(168,85,247,0.04))',
+        border: '1px solid rgba(139,92,246,0.25)',
+        borderRadius: '14px',
+        padding: '14px 16px',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <span style={{ fontSize: '14px' }}>✨</span>
-          <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
+        {/* Shimmer line at top */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent)',
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+          <div style={{
+            width: 26, height: 26, borderRadius: '8px',
+            background: 'rgba(168,85,247,0.15)',
+            border: '1px solid rgba(168,85,247,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '13px',
+          }}>✨</div>
+          <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
             AI Intelligence
           </span>
+          {loadingSummary && (
+            <motion.div
+              animate={{ opacity: [1, 0.3, 1] }}
+              transition={{ repeat: Infinity, duration: 1 }}
+              style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7', marginLeft: 'auto' }}
+            />
+          )}
         </div>
-        
+
         {loadingSummary ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <motion.div 
-              animate={{ opacity: [0.3, 0.7, 0.3] }} 
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '100%' }} 
-            />
-            <motion.div 
-              animate={{ opacity: [0.3, 0.7, 0.3] }} 
-              transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
-              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '85%' }} 
-            />
-            <motion.div 
-              animate={{ opacity: [0.3, 0.7, 0.3] }} 
-              transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }}
-              style={{ height: '8px', background: 'rgba(124,58,237,0.2)', borderRadius: '4px', width: '60%' }} 
-            />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[100, 85, 70].map((w, i) => (
+              <motion.div
+                key={i}
+                animate={{ opacity: [0.2, 0.55, 0.2] }}
+                transition={{ repeat: Infinity, duration: 1.6, delay: i * 0.15 }}
+                style={{ height: '9px', background: 'rgba(168,85,247,0.2)', borderRadius: '4px', width: `${w}%` }}
+              />
+            ))}
           </div>
         ) : (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6, fontFamily: 'Inter, sans-serif' }}
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            style={{ fontSize: '12.5px', color: '#cbd5e1', lineHeight: 1.7, fontFamily: 'Inter, sans-serif' }}
           >
             {summary}
           </motion.div>
         )}
       </div>
 
-      {/* Data Source */}
+      {/* ─── DATA SOURCE ─── */}
       <div style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.05)',
+        background: 'rgba(255,255,255,0.025)',
+        border: '1px solid rgba(255,255,255,0.07)',
         borderRadius: '10px',
-        padding: '12px',
+        padding: '12px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
       }}>
-        <div style={{ fontSize: '11px', color: '#475569', marginBottom: '6px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-          Data Source
+        <div style={{
+          width: 32, height: 32, borderRadius: '8px',
+          background: node.confidence === 'VERIFIED' ? 'rgba(74,222,128,0.1)' : 'rgba(148,163,184,0.08)',
+          border: `1px solid ${node.confidence === 'VERIFIED' ? 'rgba(74,222,128,0.25)' : 'rgba(148,163,184,0.15)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '14px', flexShrink: 0,
+        }}>
+          {node.confidence === 'VERIFIED' ? '🛃' : '🤖'}
         </div>
-        <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-          {node.confidence === 'VERIFIED' ? 'ImportYeti (Bill of Lading)' : 'LLM-inferred (GPT-4o)'}
-        </div>
-        <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-          {node.confidence === 'VERIFIED' ? 'US Customs Import Records' : 'Not confirmed via trade records'}
+        <div>
+          <div style={{ fontSize: '12px', color: '#cbd5e1', fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+            {node.confidence === 'VERIFIED' ? 'ImportYeti · US Customs' : 'LLM-Inferred (Llama 3)'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px', fontFamily: 'Inter, sans-serif' }}>
+            {node.confidence === 'VERIFIED' ? 'Bill of Lading records' : 'Not confirmed via trade data'}
+          </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
-        <ShimmerButton
-          onClick={onSimulate}
-          style={{ width: '100%', justifyContent: 'center' }}
-        >
+      {/* ─── ACTIONS ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', paddingTop: '4px' }}>
+        <ShimmerButton onClick={onSimulate} style={{ width: '100%', justifyContent: 'center' }}>
           ⚡ Simulate Disruption
         </ShimmerButton>
-        <ShimmerButton
-          onClick={onViewMap}
-          variant="outline"
-          style={{ width: '100%', justifyContent: 'center' }}
-        >
+        <ShimmerButton onClick={onViewMap} variant="outline" style={{ width: '100%', justifyContent: 'center' }}>
           ↗ View on Map
         </ShimmerButton>
       </div>
