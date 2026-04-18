@@ -48,10 +48,17 @@ const api = {
     },
 
     /**
-     * Get real-time AI summary of a company's operations
+     * Get contextual AI summary of a company's role in the supply chain
      */
-    async getCompanySummary(company, country = '') {
-        const response = await fetch(`/api/entity/summary?company=${encodeURIComponent(company)}&country=${encodeURIComponent(country)}`);
+    async getCompanySummary(company, country = '', context = {}) {
+        const params = new URLSearchParams({ company, country });
+        if (context.rootCompany) params.set('rootCompany', context.rootCompany);
+        if (context.tier !== undefined) params.set('tier', context.tier);
+        if (context.hsnCodes?.length) params.set('hsnCodes', context.hsnCodes.join(','));
+        if (context.sector) params.set('sector', context.sector);
+        if (context.confidence) params.set('confidence', context.confidence);
+        
+        const response = await fetch(`/api/entity/summary?${params.toString()}`);
         if (!response.ok) throw new Error('Summary fetch failed');
         return await response.json();
     }

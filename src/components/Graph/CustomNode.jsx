@@ -61,16 +61,18 @@ const CustomNode = memo(({ data, selected }) => {
   const nodeWidth = tierConfig.width
   const glowColor = selected ? 'rgba(192,132,252,0.45)' : riskStyle?.glowColor
 
+  const isNew = data._isNew !== false // default to true for backward compat
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.65, y: -14 }}
+      initial={isNew ? { opacity: 0, scale: 0.65, y: -14 } : false}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{
+      transition={isNew ? {
         type: 'spring',
         stiffness: 260,
         damping: 20,
         mass: 0.9,
-      }}
+      } : { duration: 0.1 }}
       style={{ position: 'relative' }}
     >
       {/* Pulsing glow ring for risky/selected nodes */}

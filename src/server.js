@@ -232,10 +232,18 @@ app.post('/api/entity/batch', async (req, res) => {
 // On-demand AI Company Summary
 app.get('/api/entity/summary', async (req, res) => {
     try {
-        const { company, country } = req.query;
+        const { company, country, rootCompany, tier, hsnCodes, sector, confidence } = req.query;
         if (!company) return res.status(400).json({ error: 'Missing company parameter' });
 
-        const summaryText = await entity.summary.generateCompanySummary(company, country);
+        const context = {
+            rootCompany: rootCompany || undefined,
+            tier: tier !== undefined ? parseInt(tier) : undefined,
+            hsnCodes: hsnCodes ? hsnCodes.split(',') : undefined,
+            sector: sector || undefined,
+            confidence: confidence || undefined,
+        };
+
+        const summaryText = await entity.summary.generateCompanySummary(company, country, context);
         res.json({ source: 'llm', company, summary: summaryText });
     } catch (err) {
         res.status(500).json({ error: err.message });

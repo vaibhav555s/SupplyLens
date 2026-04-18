@@ -101,53 +101,124 @@ const RippleEffect = ({ position }) => {
 }
 
 // Inner flow component that has access to ReactFlow instance
-const FlowInner = ({ layoutedNodes, layoutedEdges, onNodeClick, displayedCount, graphNodeCount }) => {
+const FlowInner = ({ layoutedNodes, layoutedEdges, onNodeClick, graphNodeCount }) => {
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
   const [ripple, setRipple] = useState(null)
   const [revealedCount, setRevealedCount] = useState(0)
+  const hasRevealedRef = useRef(false) // tracks if initial reveal has completed
+  const seenNodeIdsRef = useRef(new Set()) // tracks which nodes have been animated in
+  const revealTimerRef = useRef(null) // cleanup for staged reveal timers
 
-  // Staged tier-by-tier reveal with stagger
+  // Staged tier-by-tier reveal on INITIAL LOAD only
+  // On subsequent tier toggles, just update instantly
   useEffect(() => {
-    setRevealedCount(0)
-    setEdges([]) // hide edges initially
     const totalNodes = layoutedNodes.length
-    if (totalNodes === 0) return
+    if (totalNodes === 0) {
+      setNodes([])
+      setEdges([])
+      return
+    }
 
-    // Sort by tier so reveal is tier-0 → tier-1 → tier-2...
-    const sorted = [...layoutedNodes].sort((a, b) => (a.data.tier || 0) - (b.data.tier || 0))
+    if (!hasRevealedRef.current) {
+      // ─── INITIAL LOAD: staged one-by-one reveal ───
+      setRevealedCount(0)
+      setEdges([]) // hide edges initially
+      setNodes([])
 
-    setNodes([])
+      const sorted = [...layoutedNodes].sort((a, b) => (a.data.tier || 0) - (b.data.tier || 0))
+      // Mark all nodes as "new" so CustomNode plays entrance animation
+      const nodesWithNewFlag = sorted.map(n => ({
+        ...n,
+        data: { ...n.data, _isNew: true },
+      }))
 
-    let idx = 0
-    // Add nodes one at a time with per-tier stagger delay
-    const addNext = () => {
-      if (idx >= sorted.length) {
-        // All nodes shown — now reveal edges with a fade
-        setTimeout(() => setEdges(layoutedEdges), 300)
-        // Then fit the view
-        setTimeout(() => fitView({ padding: 0.2, duration: 800 }), 600)
-        return
+      let idx = 0
+      const timeouts = []
+
+      const addNext = () => {
+        if (idx >= nodesWithNewFlag.length) {
+          // All nodes shown — now reveal edges with a fade
+          const t1 = setTimeout(() => setEdges(layoutedEdges), 300)
+          // Then fit the view
+          const t2 = setTimeout(() => fitView({ padding: 0.2, duration: 800 }), 600)
+          timeouts.push(t1, t2)
+          hasRevealedRef.current = true
+          // Record all revealed node IDs
+          sorted.forEach(n => seenNodeIdsRef.current.add(n.id))
+          return
+        }
+        setNodes(prev => [...prev, nodesWithNewFlag[idx]])
+        setRevealedCount(idx + 1)
+        idx++
+
+        // Slightly longer delay at tier boundaries to create a "wave" effect
+        const currentTier = nodesWithNewFlag[idx - 1]?.data?.tier || 0
+        const nextTier = nodesWithNewFlag[idx]?.data?.tier
+        const delay = nextTier !== undefined && nextTier !== currentTier ? 400 : 120
+        const t = setTimeout(addNext, delay)
+        timeouts.push(t)
       }
-      setNodes(prev => [...prev, sorted[idx]])
-      setRevealedCount(idx + 1)
-      idx++
 
-      // Slightly longer delay at tier boundaries to create a "wave" effect
-      const currentTier = sorted[idx - 1]?.data?.tier || 0
-      const nextTier = sorted[idx]?.data?.tier
-      const delay = nextTier !== undefined && nextTier !== currentTier ? 400 : 120
-      setTimeout(addNext, delay)
-    }
+      const startTimer = setTimeout(addNext, 200)
+      timeouts.push(startTimer)
+      revealTimerRef.current = timeouts
 
-    const startTimer = setTimeout(addNext, 200)
-    return () => {
-      clearTimeout(startTimer)
-      setNodes(sorted)
+      return () => {
+        timeouts.forEach(clearTimeout)
+        // If unmounted during reveal, just show everything
+        setNodes(sorted)
+        setEdges(layoutedEdges)
+        hasRevealedRef.current = true
+        sorted.forEach(n => seenNodeIdsRef.current.add(n.id))
+      }
+    } else {
+      // ─── TIER TOGGLE: smooth reposition via CSS transition ───
+      const currentSeenIds = seenNodeIdsRef.current
+      const newLayoutMap = new Map(layoutedNodes.map(n => [n.id, n]))
+      const newIds = new Set(layoutedNodes.map(n => n.id))
+
+      // Record newly seen IDs
+      layoutedNodes.forEach(n => seenNodeIdsRef.current.add(n.id))
+
+      // Use functional update to preserve React node identity
+      // This is critical — if we replace the array, React unmounts/remounts
+      // and the CSS transition on .react-flow__node won't fire
+      setNodes(currentNodes => {
+        // 1. Keep existing nodes, update their positions + data
+        const updated = currentNodes
+          .filter(n => newIds.has(n.id)) // remove nodes no longer visible
+          .map(n => {
+            const newLayout = newLayoutMap.get(n.id)
+            if (!newLayout) return n
+            return {
+              ...n,
+              position: newLayout.position, // CSS transition animates this
+              data: { ...newLayout.data, _isNew: false },
+            }
+          })
+
+        // 2. Find genuinely new nodes (not in current set)
+        const currentIds = new Set(currentNodes.map(n => n.id))
+        const brandNew = layoutedNodes
+          .filter(n => !currentIds.has(n.id))
+          .map(n => ({
+            ...n,
+            data: { ...n.data, _isNew: true },
+          }))
+
+        return [...updated, ...brandNew]
+      })
+
       setEdges(layoutedEdges)
+      setRevealedCount(layoutedNodes.length)
+
+      // Smooth re-fit after CSS transition settles
+      setTimeout(() => fitView({ padding: 0.2, duration: 600 }), 550)
     }
-  }, [layoutedNodes.map(n => n.id).join(',')])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutedNodes.map(n => `${n.id}:${Math.round(n.position.x)},${Math.round(n.position.y)}`).join('|')])
 
   const handleNodeClick = useCallback((event, node) => {
     // Ripple effect at click position
@@ -292,7 +363,55 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
   }, [graphData, onNodeClick])
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      {/* ─── TACTICAL OVERLAY ─── */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        pointerEvents: 'none',
+        zIndex: 5,
+        border: '1px solid rgba(139,92,246,0.1)',
+        boxShadow: 'inset 0 0 100px rgba(0,0,0,0.5)',
+      }}>
+        {/* Animated Scanning Grid */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `
+            linear-gradient(rgba(139,92,246,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(139,92,246,0.03) 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px',
+        }} />
+        
+        {/* Scanning Laser Line */}
+        <motion.div
+          animate={{ top: ['-10%', '110%'] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+          style={{
+            position: 'absolute', left: 0, right: 0, height: '2px',
+            background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.2), transparent)',
+            boxShadow: '0 0 15px rgba(168,85,247,0.3)',
+          }}
+        />
+
+        {/* Corner Brackets */}
+        {[
+          { top: 20, left: 20, borderLeft: '2px solid rgba(168,85,247,0.4)', borderTop: '2px solid rgba(168,85,247,0.4)' },
+          { top: 20, right: 20, borderRight: '2px solid rgba(168,85,247,0.4)', borderTop: '2px solid rgba(168,85,247,0.4)' },
+          { bottom: 20, left: 20, borderLeft: '2px solid rgba(168,85,247,0.4)', borderBottom: '2px solid rgba(168,85,247,0.4)' },
+          { bottom: 20, right: 20, borderRight: '2px solid rgba(168,85,247,0.4)', borderBottom: '2px solid rgba(168,85,247,0.4)' },
+        ].map((style, i) => (
+          <div key={i} style={{ position: 'absolute', width: 20, height: 20, ...style }} />
+        ))}
+
+        {/* Tactical Badges */}
+        <div style={{ position: 'absolute', top: 30, left: 50, color: 'rgba(124,58,237,0.4)', fontSize: '10px', fontFamily: 'JetBrains Mono', letterSpacing: '0.1em' }}>
+          NETWORK_SCAN v4.2 [ACTIVE]
+        </div>
+        <div style={{ position: 'absolute', bottom: 30, right: 50, color: 'rgba(124,58,237,0.4)', fontSize: '10px', fontFamily: 'JetBrains Mono', letterSpacing: '0.1em' }}>
+          INTEL_FEED_ENHANCED // {new Date().toLocaleTimeString()}
+        </div>
+      </div>
+
       <ReactFlowProvider>
         <FlowInner
           layoutedNodes={layoutedNodes}
@@ -302,7 +421,7 @@ const SupplyGraph = ({ graphData, visibleTiers, selectedNode, onNodeClick, disru
         />
       </ReactFlowProvider>
     </div>
-  )
-}
+  );
+};
 
 export default SupplyGraph

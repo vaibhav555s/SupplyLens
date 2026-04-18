@@ -65,7 +65,7 @@ const RiskRow = ({ label, status, detail }) => {
   )
 }
 
-const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
+const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes }) => {
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
@@ -73,7 +73,13 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
     if (node && node.label) {
       setLoadingSummary(true)
       setSummary(null)
-      api.getCompanySummary(node.label, node.country)
+      api.getCompanySummary(node.label, node.country, {
+        rootCompany: rootCompany || '',
+        tier: node.tier,
+        hsnCodes: hsnCodes || [],
+        sector: node.sector || '',
+        confidence: node.confidence || '',
+      })
         .then(res => { setSummary(res.summary) })
         .catch(() => { setSummary("AI insights currently unavailable.") })
         .finally(() => { setLoadingSummary(false) })

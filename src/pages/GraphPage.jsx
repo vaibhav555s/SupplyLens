@@ -847,6 +847,8 @@ const GraphPage = () => {
             key={selectedNode?.id || 'empty'}
             onSimulate={() => selectedNode && setShowModal(true)}
             onViewMap={() => setView('map')}
+            rootCompany={companyName}
+            hsnCodes={hsnCodes}
           />
         </AnimatePresence>
       </div>

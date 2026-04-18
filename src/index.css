@@ -111,6 +111,26 @@ html, body {
   background: #08080f !important;
 }
 
+/* Smooth node repositioning on tier toggle */
+.react-flow__node {
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Smooth edge appearance */
+.react-flow__edge {
+  transition: opacity 0.4s ease !important;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+  transition: stroke 0.3s ease, stroke-width 0.3s ease, stroke-dasharray 0.3s ease;
+}
+
+/* Edge labels fade in smoothly */
+.react-flow__edge-textwrapper {
+  transition: opacity 0.4s ease !important;
+}
+
 .react-flow__controls {
   background: rgba(13, 13, 20, 0.8) !important;
   border: 1px solid rgba(139, 92, 246, 0.2) !important;
@@ -132,10 +152,6 @@ html, body {
   background: rgba(13, 13, 20, 0.8) !important;
   border: 1px solid rgba(139, 92, 246, 0.2) !important;
   border-radius: 12px !important;
-}
-
-.react-flow__edge-path {
-  stroke-linecap: round;
 }
 
 /* Leaflet overrides */

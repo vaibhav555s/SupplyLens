@@ -133,7 +133,8 @@ async function httpPost(url, data, options = {}) {
             });
 
             if (response.status === 429) {
-                const retryAfter = parseInt(response.headers['retry-after'], 10) || 5;
+                const retryAfter = parseInt(response.headers['retry-after'], 10) || 15;
+                console.warn(`[HTTP] Rate limit encountered for ${source}. Waiting ${retryAfter}s before retry...`);
                 await sleep(retryAfter * 1000);
                 continue;
             }
