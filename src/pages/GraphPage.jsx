@@ -8,7 +8,7 @@ import NodeDetailPanel from '../components/Graph/NodeDetailPanel'
 import ShimmerButton from '../components/UI/ShimmerButton'
 import { mockGraphData, riskAlerts, mockCompany } from '../data/mockData'
 
-const TIERS = [0, 1, 2, 3]
+const TIERS = [0, 1, 2, 3, 4, 5, 6]
 
 const DisruptionModal = ({ node, onClose, onApply }) => {
   const [type, setType] = useState(null)
@@ -250,7 +250,7 @@ const GraphPage = () => {
   }, [realEntity, companyName, hsnCodes])
 
   const [view, setView] = useState('graph')
-  const [visibleTiers, setVisibleTiers] = useState([0, 1, 2, 3])
+  const [visibleTiers, setVisibleTiers] = useState([0, 1, 2, 3, 4, 5, 6])
   const [selectedNode, setSelectedNode] = useState(null)
   const [disruptions, setDisruptions] = useState([])
   const [showModal, setShowModal] = useState(false)
@@ -569,6 +569,7 @@ const GraphPage = () => {
               >
                 <GeoMap
                   graphData={graphData}
+                  visibleTiers={visibleTiers}
                   selectedNode={selectedNode}
                   onNodeClick={handleNodeClick}
                   disruptions={disruptions}
