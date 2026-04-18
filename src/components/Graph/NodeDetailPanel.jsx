@@ -148,17 +148,22 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap }) => {
 
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)' }} />
 
-      {/* HSN Codes */}
-      {node.hsn && node.hsn.length > 0 && (
-        <div>
-          <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-            HSN Codes
+      {/* HSN Codes — normalize to array (API sends string, LLM sends array) */}
+      {node.hsn && node.hsn.length > 0 && (() => {
+        const hsnArray = Array.isArray(node.hsn)
+          ? node.hsn
+          : String(node.hsn).split(',').map(s => s.trim()).filter(Boolean);
+        return hsnArray.length > 0 ? (
+          <div>
+            <div style={{ fontSize: '11px', color: '#475569', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
+              HSN Codes
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {hsnArray.map(code => <HSNTag key={code} code={code} size="sm" />)}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {node.hsn.map(code => <HSNTag key={code} code={code} size="sm" />)}
-          </div>
-        </div>
-      )}
+        ) : null;
+      })()}
 
       {/* Trade Volume */}
       {(node.shipments > 0 || node.value) && (

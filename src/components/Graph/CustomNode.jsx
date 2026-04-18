@@ -154,15 +154,19 @@ const CustomNode = memo(({ data, selected }) => {
         </div>
       )}
 
-      {/* HSN codes */}
-      {data.hsn && data.hsn.length > 0 && (
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '4px',
-          marginBottom: '8px',
-        }}>
-          {data.hsn.slice(0, 3).map(code => (
+      {/* HSN codes — normalize to array (API sends string, LLM sends array) */}
+      {data.hsn && data.hsn.length > 0 && (() => {
+        const hsnArray = Array.isArray(data.hsn)
+          ? data.hsn
+          : String(data.hsn).split(',').map(s => s.trim()).filter(Boolean);
+        return hsnArray.length > 0 ? (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px',
+            marginBottom: '8px',
+          }}>
+            {hsnArray.slice(0, 3).map(code => (
             <span
               key={code}
               style={{
@@ -177,9 +181,10 @@ const CustomNode = memo(({ data, selected }) => {
             >
               {code}
             </span>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : null;
+      })()}
 
       {/* Bottom row: tier + shipment count */}
       <div style={{
