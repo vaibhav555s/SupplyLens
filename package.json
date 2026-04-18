@@ -1,0 +1,20 @@
+{
+  "name": "supply-chain-xray",
+  "version": "1.0.0",
+  "description": "N-tier supply chain graph from open trade data",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "test:m1": "node tests/test_module1.js",
+    "test:m2": "node tests/test_module2.js",
+    "test": "node tests/test_module1.js && node tests/test_module2.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.0",
+    "uuid": "^10.0.0"
+  }
+}
