@@ -87,20 +87,54 @@ const LandingPage = () => {
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
-      overflow: 'hidden',
-      padding: '20px',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      background: '#020617', // Ensure solid dark background
     }}>
       <AmbientBackground />
 
+      {/* Spline 3D Hero Section */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.5, delay: 0.5 }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '650px',
+          zIndex: 1,
+          pointerEvents: 'none', // Allows scrolling and clicking through to search
+          maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', // Smooth fade at bottom
+          WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+        }}
+      >
+        <iframe 
+          src="https://my.spline.design/blockchain-iGofSppMfDjRUEBbyrBEhju5/" 
+          frameBorder="0" 
+          width="100%" 
+          height="100%"
+          loading="lazy"
+          title="Blockchain Spline Model"
+          style={{ 
+            opacity: 0.7,
+            transform: 'scale(1.1)', // Slight zoom for impact
+          }}
+        />
+      </motion.div>
+
       <div style={{
         position: 'relative',
-        zIndex: 2,
+        zIndex: 10, // Ensure content is above Spline
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: '24px',
-        maxWidth: '640px',
+        maxWidth: '800px', // Wider to accommodate the visual weight
         width: '100%',
+        paddingBottom: '100px', // Spacer for the hero model
+        marginTop: '80px', // Adjust for centering model visually
       }}>
         {/* Eyebrow */}
         <motion.div
