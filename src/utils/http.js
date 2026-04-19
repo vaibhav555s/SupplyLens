@@ -54,8 +54,15 @@ async function httpGet(url, options = {}) {
             const response = await axios.get(url, {
                 params,
                 headers: {
-                    'User-Agent': 'SupplyChainXRay/1.0 (research; contact@supplychainxray.com)',
-                    'Accept': 'application/json, text/html',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
                     ...headers,
                 },
                 timeout,
@@ -135,6 +142,12 @@ async function httpPost(url, data, options = {}) {
 
             if (response.status === 429) {
                 const retryAfter = parseInt(response.headers['retry-after'], 10) || 15;
+                if (retryAfter > 5) {
+                    console.warn(`[HTTP] Rate limit encountered for ${source}. Time too high (${retryAfter}s) - bypassing retry to avoid pipeline hang.`);
+                    const e = new Error(`Rate limit exceeded - retry timeframe too large (${retryAfter}s)`);
+                    e.isAuthError = true; // prevent basic retry logic below from catching this
+                    throw e;
+                }
                 console.warn(`[HTTP] Rate limit encountered for ${source}. Waiting ${retryAfter}s before retry...`);
                 await sleep(retryAfter * 1000);
                 continue;

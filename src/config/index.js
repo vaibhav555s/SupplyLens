@@ -12,6 +12,7 @@ module.exports = {
   groqApiKey: process.env.GROQ_API_KEY || '',
   mongodbUri: process.env.MONGODB_URI || '',
   jwtSecret: process.env.JWT_SECRET || 'scxray_dev_secret_change_in_production',
+  openSanctionsApiKey: process.env.OPENSANCTIONS_API_KEY || '',
 
   // Redis
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',

@@ -158,7 +158,7 @@ const DisruptionModal = ({ node, onClose, onApply }) => {
   )
 }
 
-const DisruptionToast = ({ onReset, onReroute, isResolving }) => (
+const DisruptionToast = ({ onReset, onReroute, isResolving, result }) => (
   <motion.div
     initial={{ x: 100, opacity: 0 }}
     animate={{ x: 0, opacity: 1 }}
@@ -183,7 +183,7 @@ const DisruptionToast = ({ onReset, onReroute, isResolving }) => (
       </span>
     </div>
     <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
-      78% of BOM at risk · Action required
+      {result ? `${result.bom_impact_pct}% of BOM at risk · Action required (Est recovery: ${result.recovery_est} days)` : '78% of BOM at risk · Action required'}
     </div>
     <div style={{ display: 'flex', gap: '8px' }}>
       <button
@@ -237,6 +237,7 @@ const GraphPage = () => {
   // 1. Graph State
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] })
   const [isBuildingGraph, setIsBuildingGraph] = useState(true)
+  const [scanResults, setScanResults] = useState(null)
 
   // 2. Fetch/Construct Graph Mapping
   useEffect(() => {
@@ -258,6 +259,12 @@ const GraphPage = () => {
             generatedGraph.edges = []
           }
           setGraphData(generatedGraph)
+
+          try {
+            const scan = await api.vulnerabilityScan(generatedGraph);
+            if (mounted) setScanResults(scan);
+          } catch(e) { console.warn('Scan failed', e); }
+
           setIsBuildingGraph(false)
 
           // Auto-save to dashboard via MongoDB API
@@ -291,6 +298,7 @@ const GraphPage = () => {
   const [disruptions, setDisruptions] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showToast, setShowToast] = useState(false)
+  const [activeDisruptionResult, setActiveDisruptionResult] = useState(null)
   const [prunedOpen, setPrunedOpen] = useState(false)
   const [isResolvingReroute, setIsResolvingReroute] = useState(false)
   const [resolvedDisruptions, setResolvedDisruptions] = useState([])
@@ -309,16 +317,30 @@ const GraphPage = () => {
     setSelectedNode(node)
   }, [])
 
-  const handleSimulate = (node, type) => {
+  const handleSimulate = async (node, type) => {
     setShowModal(false)
-    if (node) {
-      setDisruptions([node.id])
+    if (!node) return;
+
+    try {
+      const api = (await import('../services/api')).default;
+      const res = await api.simulateDisruption(node.id, type, graphData);
+      
+      // Use the nodes from the cascade
+      const disruptedIds = res.cascade.map(c => c.id);
+      setDisruptions(disruptedIds);
+      setActiveDisruptionResult(res);
+      setShowToast(true);
+    } catch (err) {
+      console.error(err);
+      // Fallback
+      setDisruptions([node.id]);
+      setShowToast(true);
     }
-    setShowToast(true)
   }
 
   const handleReset = () => {
     setDisruptions([])
+    setActiveDisruptionResult(null)
     setShowToast(false)
   }
 
@@ -823,6 +845,37 @@ const GraphPage = () => {
             </AnimatePresence>
           </div>
 
+          {/* Vulnerability Scan Results */}
+          {scanResults && scanResults.scenarios?.length > 0 && (
+            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ fontSize: '10px', color: '#475569', marginBottom: '10px', fontFamily: 'Inter, sans-serif', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Top Vulnerabilities
+              </div>
+              {scanResults.scenarios.slice(0, 3).map(vuln => (
+                <div key={vuln.node_id} style={{ marginBottom: '10px', padding: '8px', background: 'rgba(239,68,68,0.05)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', color: '#cbd5e1', fontWeight: 600, fontFamily: 'Sora, sans-serif' }}>{vuln.label}</span>
+                    <span style={{ fontSize: '10px', color: '#ef4444', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>T{vuln.tier}</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'Inter, sans-serif', marginBottom: '6px' }}>
+                    Nodes Affected: {vuln.affected_count}
+                  </div>
+                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, vuln.supply_chain_coverage || 0)}%` }}
+                      transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
+                      style={{ height: '100%', background: 'linear-gradient(90deg, #fbbf24, #ef4444)', borderRadius: '2px' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '9px', color: '#64748b', textAlign: 'right', marginTop: '4px' }}>
+                    {vuln.supply_chain_coverage}% Impact Potential
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Disruption button */}
           <ShimmerButton
             onClick={() => setShowModal(true)}
@@ -968,7 +1021,7 @@ const GraphPage = () => {
       {/* Toast */}
       <AnimatePresence>
         {showToast && (
-          <DisruptionToast onReset={handleReset} onReroute={handleReroute} isResolving={isResolvingReroute} />
+          <DisruptionToast onReset={handleReset} onReroute={handleReroute} isResolving={isResolvingReroute} result={activeDisruptionResult} />
         )}
       </AnimatePresence>
     </div>

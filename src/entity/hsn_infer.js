@@ -1,103 +1,168 @@
+/**
+ * HSN Inference v2
+ *
+ * Priority:
+ *   1. Exact registry lookup  → instant, deterministic
+ *   2. Fuzzy registry lookup  → substring / partial match
+ *   3. LLM fallback           → only if registry misses
+ */
+
 const { httpPost } = require('../utils/http');
 const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 const config = require('../config');
 const { jsonrepair } = require('jsonrepair');
+const registry = require('../data/hsnRegistry.json');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
+// Build a lookup-ready version of the registry (lowercase keys, stripped punctuation)
+const REGISTRY_KEYS = Object.keys(registry).filter(k => !k.startsWith('_'));
+
 /**
- * Uses Groq to infer the most likely HSN codes imported by a company.
- * This is used to dynamically generate real-time data for the presentation
- * without waiting 2 minutes for slow web scrapers.
+ * Normalize a company name for registry matching.
  */
-async function inferCompanyHSNCodes(companyName) {
-    if (!config.groqApiKey) {
-        throw new Error('Groq API Key is required for real-time HSN inference');
+function normalizeCompanyKey(name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+}
+
+/**
+ * Find the best registry entry for a given company name.
+ * Returns null if no match found.
+ */
+function registryLookup(companyName) {
+    const key = normalizeCompanyKey(companyName);
+
+    // Step 1 — exact match
+    if (registry[key]) {
+        console.log(`[HSN v2] Registry exact match: "${key}"`);
+        return { codes: registry[key], source: 'registry-exact' };
     }
 
-    const key = cacheKey('hsn_infer', companyName);
-    const cached = await cacheGet(key);
+    // Step 2 — fuzzy substring match (registry key is substring of company name or vice versa)
+    const fuzzyKey = REGISTRY_KEYS.find(rk => {
+        const nrk = normalizeCompanyKey(rk);
+        return key.includes(nrk) || nrk.includes(key);
+    });
+
+    if (fuzzyKey) {
+        console.log(`[HSN v2] Registry fuzzy match: "${companyName}" → "${fuzzyKey}"`);
+        return { codes: registry[fuzzyKey], source: 'registry-fuzzy' };
+    }
+
+    return null;
+}
+
+/**
+ * Infer HS codes for a company using the LLM.
+ * (Existing logic, unchanged — now only called as fallback)
+ */
+async function inferWithLLM(companyName) {
+    if (!config.groqApiKey) {
+        throw new Error('Groq API Key is required for LLM fallback HSN inference');
+    }
+
+    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-1b-preview'];
+    let lastError;
+
+    for (const model of models) {
+        try {
+            const response = await httpPost(GROQ_API_URL, {
+                model,
+                max_tokens: 1000,
+                temperature: 0.1,
+                response_format: { type: 'json_object' },
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a global supply chain trade expert. Output only valid JSON.',
+                    },
+                    {
+                        role: 'user',
+                        content: `Identify the top 6 most likely imported products (and their real 6-digit HSN codes) for the company "${companyName}".
+Return ONLY a JSON object with a single key "hsnCodes" containing an array of objects.
+IMPORTANT: DO NOT just copy generic examples. The HSN codes MUST accurately reflect "${companyName}"'s primary industry.
+Each object must have exactly these keys:
+"code" (string, the realistic 6-digit HSN code),
+"description" (string, short product description),
+"records" (number, plausible shipment volume 100-3000),
+"countries" (array of exactly 3 country ISO codes like ["JP","TW","CN"]),
+"flags" (array of 3 flag emojis matching the countries),
+"icon" (a single relevant emoji for the product).`,
+                    },
+                ],
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${config.groqApiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 15000,
+            });
+
+            const text = response?.choices?.[0]?.message?.content || '';
+
+            let parsed;
+            try {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) throw new Error('No JSON found');
+                parsed = JSON.parse(jsonMatch[0]);
+            } catch {
+                const start = text.indexOf('{');
+                if (start === -1) throw new Error('No JSON found');
+                parsed = JSON.parse(jsonrepair(text.slice(start)));
+            }
+
+            return parsed.hsnCodes || [];
+        } catch (err) {
+            lastError = err;
+            console.warn(`[HSN v2] LLM model ${model} failed: ${err.message}. Trying next...`);
+        }
+    }
+
+    throw lastError;
+}
+
+/**
+ * Main entry point — infer HS codes for a company.
+ * Returns an array of HSN code objects (same format as before).
+ *
+ * @param {string} companyName
+ * @returns {Promise<Array>}
+ */
+async function inferCompanyHSNCodes(companyName) {
+    const cKey = cacheKey('hsn_infer_v2', companyName);
+    const cached = await cacheGet(cKey);
     if (cached) {
+        console.log(`[HSN v2] Cache hit for "${companyName}"`);
         return cached;
     }
 
-    console.log(`[LLM] Inferring real-time HSN codes for "${companyName}"...`);
+    // Step 1 & 2 — registry lookup (free, instant)
+    const registryResult = registryLookup(companyName);
+    if (registryResult) {
+        // Convert plain code strings to the expected object format for backwards compat
+        const result = registryResult.codes.map(code => ({
+            code,
+            description: '',
+            records: 0,
+            countries: [],
+            flags: [],
+            icon: '📦',
+            source: registryResult.source,
+        }));
+        await cacheSet(cKey, result, 86400);
+        return result;
+    }
 
+    // Step 3 — LLM fallback
+    console.log(`[HSN v2] Registry miss for "${companyName}" — calling LLM...`);
     try {
-        const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-1b-preview'];
-        let lastError;
-
-        for (const model of models) {
-            try {
-                const response = await httpPost(GROQ_API_URL, {
-                    model: model,
-                    max_tokens: 1000,
-                    temperature: 0.1,
-                    response_format: { type: "json_object" },
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You are a global supply chain trade expert. Output only valid JSON.'
-                        },
-                        {
-                            role: 'user',
-                            content: `Identify the top 6 most likely imported products (and their real 6-digit HSN codes) for the company "${companyName}". 
-                            Return ONLY a JSON object with a single key "hsnCodes" containing an array of objects.
-                            IMPORTANT: DO NOT just copy generic examples. The HSN codes MUST accurately reflect "${companyName}"'s primary industry (e.g. if Petrochemicals, use oil/chemical codes; if Retail, use consumer goods; if Automotive, use car parts).
-                            
-                            Each object must have exactly these keys: 
-                            "code" (string, the realistic 6-digit HSN code), 
-                            "description" (string, short product description), 
-                            "records" (number, a plausible, highly believable randomly generated number between 100 and 3000 representing shipment volume), 
-                            "countries" (array of exactly 3 country codes like ["JP", "TW", "CN"]), 
-                            "flags" (array of 3 emojis matching the countries),
-                            "icon" (a single relevant emoji for the product).`
-                        }
-                    ],
-                }, {
-                    headers: {
-                        'Authorization': `Bearer ${config.groqApiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                    timeout: 15000,
-                });
-
-                const text = response?.choices?.[0]?.message?.content || '';
-                
-                let parsed;
-                try {
-                    // Try clean parse first
-                    const jsonMatch = text.match(/\{[\s\S]*\}/);
-                    if (!jsonMatch) throw new Error("No JSON found");
-                    parsed = JSON.parse(jsonMatch[0]);
-                } catch (e1) {
-                    try {
-                        // Attempt repair if truncated
-                        const start = text.indexOf('{');
-                        if (start === -1) throw new Error("No JSON found");
-                        parsed = JSON.parse(jsonrepair(text.slice(start)));
-                    } catch (e2) {
-                        throw new Error("Invalid output format and repair failed");
-                    }
-                }
-
-                const result = parsed.hsnCodes || [];
-
-                // Save to cache for 24h
-                if (result.length > 0) {
-                    await cacheSet(key, result, 86400);
-                }
-
-                return result;
-            } catch (err) {
-                lastError = err;
-                console.warn(`[LLM] Model ${model} failed for HSN infer: ${err.message}. Trying next...`);
-            }
+        const result = await inferWithLLM(companyName);
+        if (result.length > 0) {
+            await cacheSet(cKey, result, 86400);
         }
-        
-        throw lastError;
+        return result;
     } catch (err) {
-        console.error(`[LLM] All models failed inferring HSN codes for "${companyName}": ${err.message}`);
+        console.error(`[HSN v2] All sources failed for "${companyName}": ${err.message}`);
         return [];
     }
 }

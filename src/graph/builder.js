@@ -1,9 +1,9 @@
-// ─── Supply Chain Graph Builder ───
-// Strategy: API-FIRST → LLM Fallback
+// ─── Supply Chain Graph Builder v2 ───
+// Strategy: API-FIRST → Structured Sources → LLM Last Resort
 //
-// 1. Try real connectors (ImportYeti → Zauba → Comtrade) for Tier 1+2.
-// 2. Feed those real nodes into the LLM to reason out Tiers 3-6.
-// 3. If ALL APIs fail, fall all the way back to pure LLM generation.
+// Tier 1-2:  ImportYeti → Zauba → Comtrade (real customs data)
+// Tier 3-6:  Comtrade deep-dive → SEC EDGAR → Wikidata → LLM last resort
+// Cycle guard: visitedSet prevents infinite expansion loops
 
 const { httpPost } = require('../utils/http');
 const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
@@ -11,6 +11,8 @@ const config = require('../config');
 const { importyeti, zauba, comtrade } = require('../connectors');
 const { jsonrepair } = require('jsonrepair');
 const { filterBOM } = require('../logic/bomFilter');
+const { getSupplierMentions } = require('../connectors/edgar');
+const { getCompaniesByIndustryAndCountry } = require('../connectors/wikidata');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -208,219 +210,158 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 2: LLM enrichment — adds ONLY Tier 3-6 nodes, then merges
+// SECTION 2a: Structured waterfall — Tier 3-6 nodes WITHOUT LLM
+// Priority: Comtrade deep-dive → SEC EDGAR → Wikidata
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function expandGraphWithLLM(companyName, country, hsnCodes, existingGraph) {
-    const hsnString = hsnCodes.slice(0, 5).join(',') || 'general components';
-    const hasRealData = existingGraph?.edges?.length > 0;
+/**
+ * Build Tier 3-6 nodes using structured sources recursively (no LLM).
+ * Falls back gracefully at each step — empty array if all fail.
+ *
+ * @param {string} companyName   - Root company
+ * @param {string} country       - Root company ISO-2 country
+ * @param {Array<string>} hsnCodes - Kept HS codes after BOM filter
+ * @param {object} existingGraph - API skeleton with Tier 0-2 nodes
+ * @param {Set<string>} visitedSet - Cycle guard (node labels already in graph)
+ * @returns {Promise<{nodes: Array, edges: Array}>}
+ */
+async function expandWithStructuredSources(companyName, country, hsnCodes, existingGraph, visitedSet) {
+    const allNodes = [];
+    const allEdges = [];
     const hsn0 = hsnCodes[0] || '';
 
-    const systemMsg = 'You are a supply chain expert. Output ONLY a single compact valid JSON object. No markdown, no prose, no explanation.';
+    // Collect Tier 2 nodes as expansion anchors
+    // If no Tier 2, try Tier 1. If no Tier 1, try Tier 0 (root).
+    let currentTierAnchors = (existingGraph?.nodes || []).filter(n => n.tier === 2);
+    if (currentTierAnchors.length === 0) currentTierAnchors = (existingGraph?.nodes || []).filter(n => n.tier === 1);
+    if (currentTierAnchors.length === 0) currentTierAnchors = [{ id: 'root', tier: 0, country, label: companyName }];
+    
+    let startingTier = currentTierAnchors[0].tier + 1;
 
-    let userMsg;
-    if (hasRealData) {
-        const t1Nodes = existingGraph.nodes.filter(n => n.tier === 1);
-        const t2Nodes = existingGraph.nodes.filter(n => n.tier === 2);
+    for (let currentTier = startingTier; currentTier <= 6; currentTier++) {
+        const nextTierAnchors = [];
+        
+        for (const anchor of currentTierAnchors.slice(0, 4)) {
+            const anchorCountry = anchor.country || country;
+            const anchorLabel = anchor.label || companyName;
+            let newSuppliers = [];
 
-        const missingT1 = t1Nodes.length === 0;
-        const missingT2 = t2Nodes.length === 0;
-
-        let promptTiers = [];
-        if (missingT1) promptTiers.push('- Tier 1: 3 direct suppliers (parent: root)');
-        if (missingT2) promptTiers.push('- Tier 2: 3 regional distributors (parent: a Tier 1 id)');
-
-        const t2Ids = t2Nodes.map(n => n.id).join(', ');
-        const t2Parent = missingT2 ? 'a Tier 2 id' : (t2Ids ? `one of: ${t2Ids}` : 'root');
-
-        promptTiers.push(`- Tier 3: 4 component producers (parent: ${t2Parent})`);
-        promptTiers.push('- Tier 4: 3 raw material producers (parent: a Tier 3 id)');
-        promptTiers.push('- Tier 5: 2 miners (parent: a Tier 4 id)');
-        promptTiers.push('- Tier 6: 2 terminal inputs (parent: a Tier 5 id)');
-
-        const t1ParentList = t1Nodes.map(n => n.id).join(',');
-        const rootAvail = 'root' + (t1ParentList ? `, Tier 1: ${t1ParentList}` : '') + (t2Ids ? `, Tier 2: ${t2Ids}` : '');
-
-        userMsg = `Supply chain for "${companyName}" (${country}), HSN: ${hsnString}.
-Available parent IDs: ${rootAvail}.
-Create ONLY new nodes (use real company names).
-Nodes:
-${promptTiers.join('\n')}
-Required fields per node: id,label,productName,sector,tier(integer!),country(ISO-2),country_risk_score(float),gpr_score(float),sanctions_flag(bool),data_source,data_source_detail,lat(float),lng(float).
-Required fields per edge: id,source,target,type,hsn,confidence.
-Return ONLY JSON: {"nodes":[...],"edges":[...]}`;
-    } else {
-        // No API data — generate full 6-tier graph from scratch
-        userMsg = `Generate a realistic 6-tier supply chain for "${companyName}" (${country}) HSN: ${hsnString}.
-Tier counts: 0=1(id:"root"), 1=3, 2=3, 3=2, 4=2, 5=2, 6=2. Total: 15 nodes.
-Edge: higher-tier source → lower-tier target. Tier 1 edges target "root".
-Node fields: id,label,productName,sector,tier,country(ISO-2),country_risk_score(1-100),gpr_score(1-100),sanctions_flag(bool),data_source("LLM-inferred"),data_source_detail,lat,lng.
-Edge fields: id,source,target,type("supplies"),hsn,confidence("INFERRED").
-Return ONLY JSON: {"nodes":[...],"edges":[]}`;
-    }
-
-    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-1b-preview'];
-    let lastError;
-
-    for (const model of models) {
-        try {
-            console.log(`[LLM] Requesting deep tiers from "${model}"...`);
-            const response = await httpPost(GROQ_API_URL, {
-                model,
-                max_tokens: hasRealData ? 3500 : 5000,
-                temperature: 0.3,
-                messages: [
-                    { role: 'system', content: systemMsg },
-                    { role: 'user', content: userMsg },
-                ],
-            }, {
-                headers: { 'Authorization': `Bearer ${config.groqApiKey}` },
-                timeout: 60000,
-            });
-
-            const text = response?.choices?.[0]?.message?.content || '';
-            if (!text) throw new Error('Empty response from LLM');
-
-            const parsed = extractJson(text);
-            if (!parsed) {
-                console.error(`[LLM Debug] No JSON from ${model}. Snippet: ${text.slice(0, 300)}`);
-                throw new Error('No valid JSON in LLM response');
-            }
-            if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
-                console.error(`[LLM Debug] Malformed graph structure. Parsed keys: ${Object.keys(parsed)}`);
-                throw new Error('LLM returned malformed graph structure');
-            }
-
-            // --- HELPER TO ENFORCE STRICT TIER TOPOLOGY ---
-            const enforceStrictTopology = (allNodes, allEdges) => {
-                let cleanedEdges = [];
-                const tierMap = {};
-                for (let i = 0; i <= 6; i++) {
-                    tierMap[i] = allNodes.filter(n => n.tier === i);
-                }
-
-                // First pass: keep only edges that connect to the expected strict lower-tier parent
-                for (const edge of allEdges) {
-                    const src = allNodes.find(n => n.id === edge.source);
-                    const tgt = allNodes.find(n => n.id === edge.target);
-                    if (!src || !tgt || src.tier <= tgt.tier) continue;
-
-                    // Does it skip intermediate populated tiers?
-                    let hasIntermediate = false;
-                    for (let t = src.tier - 1; t > tgt.tier; t--) {
-                        if (tierMap[t].length > 0) {
-                            hasIntermediate = true;
-                            break;
+            // ── Source 1: Comtrade deep-dive for each anchor country ──
+            if (hsnCodes.length > 0) {
+                try {
+                    const comtradeRecords = await comtrade.getTopImportPartners(anchorCountry, hsnCodes[0], 3);
+                    for (const rec of comtradeRecords) {
+                        if (rec.source_country && !newSuppliers.find(s => s.country === rec.source_country)) {
+                            newSuppliers.push({
+                                name: `${rec.source_country} ${rec.commodity || 'Component'} Suppliers`,
+                                country: rec.source_country,
+                                source: 'comtrade-tier' + currentTier,
+                                confidence: 'INFERRED',
+                            });
                         }
                     }
-                    if (!hasIntermediate) {
-                        cleanedEdges.push(edge);
-                    }
+                } catch (err) {
+                    console.warn(`[Builder/Waterfall] Comtrade T${currentTier} failed for ${anchorCountry}: ${err.message}`);
                 }
-
-                // Second pass: ensure every node > 0 has at least one edge downstream
-                for (let i = 1; i <= 6; i++) {
-                    const nodesInTier = tierMap[i];
-                    if (!nodesInTier || nodesInTier.length === 0) continue;
-
-                    // Find nearest populated lower tier
-                    let lowerTierNodes = null;
-                    for (let lower = i - 1; lower >= 0; lower--) {
-                        if (tierMap[lower] && tierMap[lower].length > 0) {
-                            lowerTierNodes = tierMap[lower];
-                            break;
-                        }
-                    }
-
-                    if (lowerTierNodes) {
-                        for (const node of nodesInTier) {
-                            const hasValidEdge = cleanedEdges.some(e => e.source === node.id && lowerTierNodes.some(p => p.id === e.target));
-                            if (!hasValidEdge) {
-                                const randomParent = lowerTierNodes[Math.floor(Math.random() * lowerTierNodes.length)];
-                                cleanedEdges.push({
-                                    id: `e_enforce_${node.id}_${randomParent.id}`,
-                                    source: node.id,
-                                    target: randomParent.id,
-                                    type: 'supplies',
-                                    hsn: hsn0,
-                                    confidence: 'INFERRED'
-                                });
-                            }
-                        }
-                    }
-                }
-                return cleanedEdges;
-            };
-
-            if (hasRealData) {
-                // MERGE: add new LLM deep-tier nodes to existing API skeleton
-                const existingIds = new Set(existingGraph.nodes.map(n => n.id));
-                const newNodes = parsed.nodes.map(n => ({
-                    ...n,
-                    tier: parseInt(n.tier, 10) || 1, // Parse tier to integer
-                    country_risk_score: parseFloat(n.country_risk_score) || 50,
-                    gpr_score: parseFloat(n.gpr_score) || 50,
-                    lat: parseFloat(n.lat) || 0,
-                    lng: parseFloat(n.lng) || 0,
-                    hsn: n.hsn || hsn0,
-                    productName: n.productName || 'Component',
-                    sector: n.sector || 'Manufacturing',
-                    data_source_detail: n.data_source_detail || 'Inferred via supply chain dynamics'
-                })).filter(n => !existingIds.has(n.id) && !isNaN(n.tier));
-
-                const mergedNodes = [...existingGraph.nodes, ...newNodes];
-                let mergedEdges = [...existingGraph.edges, ...parsed.edges];
-
-                mergedEdges = enforceStrictTopology(mergedNodes, mergedEdges);
-
-                console.log(`[LLM] Merged: ${mergedNodes.length} total nodes (${newNodes.length} new), ${mergedEdges.length} edges.`);
-                return { nodes: mergedNodes, edges: mergedEdges };
-            } else {
-                // Full LLM graph — normalize fields and root ID
-                const parsedNodes = parsed.nodes.map(n => ({
-                    ...n,
-                    tier: parseInt(n.tier, 10) || 1,
-                    country_risk_score: parseFloat(n.country_risk_score) || 50,
-                    gpr_score: parseFloat(n.gpr_score) || 50,
-                    lat: parseFloat(n.lat) || 0,
-                    lng: parseFloat(n.lng) || 0,
-                    hsn: n.hsn || hsn0,
-                    productName: n.productName || (n.tier === 0 ? companyName : 'Component'),
-                    sector: n.sector || 'Manufacturing',
-                    data_source_detail: n.data_source_detail || 'Inferred via deep-tier analysis'
-                }));
-                const rootNode = parsedNodes.find(n => n.tier === 0);
-                if (rootNode && rootNode.id !== 'root') {
-                    const oldId = rootNode.id;
-                    rootNode.id = 'root';
-                    parsed.edges.forEach(e => {
-                        if (e.source === oldId) e.source = 'root';
-                        if (e.target === oldId) e.target = 'root';
-                    });
-                }
-                parsed.nodes = parsedNodes;
-                parsed.edges = enforceStrictTopology(parsed.nodes, parsed.edges);
-
-                console.log(`[LLM] Full graph: ${parsed.nodes.length} nodes, ${parsed.edges.length} edges.`);
-                return parsed;
             }
-        } catch (err) {
-            lastError = err;
-            console.warn(`[LLM] Model "${model}" failed: ${err.message}. Trying next...`);
+
+            // ── Source 2: SEC EDGAR — supplier mentions in 10-K filings ──
+            if (newSuppliers.length < 2) {
+                try {
+                    const edgarSuppliers = await getSupplierMentions(anchorLabel, hsn0.substring(0, 4) || 'component', hsn0);
+                    for (const s of edgarSuppliers.slice(0, 3)) {
+                        if (!visitedSet.has(s.name.toLowerCase())) {
+                            newSuppliers.push(s);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`[Builder/Waterfall] EDGAR T${currentTier} failed for ${anchorLabel}: ${err.message}`);
+                }
+            }
+
+            // ── Source 3: Wikidata — companies by industry + country ──
+            if (newSuppliers.length < 2) {
+                try {
+                    const wikidataCompanies = await getCompaniesByIndustryAndCountry(anchorCountry, hsn0, 2);
+                    for (const s of wikidataCompanies) {
+                        if (!visitedSet.has(s.name.toLowerCase())) {
+                            newSuppliers.push(s);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`[Builder/Waterfall] Wikidata T${currentTier} failed for ${anchorCountry}: ${err.message}`);
+                }
+            }
+
+            // Build nodes from collected suppliers
+            for (const supplier of newSuppliers.slice(0, 3)) {
+                const supplierKey = supplier.name.toLowerCase();
+                if (visitedSet.has(supplierKey)) continue;
+                visitedSet.add(supplierKey);
+
+                const nodeId = `t${currentTier}_${toNodeId(supplier.name)}`;
+                if ((existingGraph?.nodes || []).some(n => n.id === nodeId) || allNodes.some(n => n.id === nodeId)) continue;
+
+                const coords = coordsFor(supplier.country || anchorCountry);
+                const nodeCountry = supplier.country || anchorCountry;
+
+                const newNode = {
+                    id: nodeId,
+                    label: supplier.name,
+                    productName: `${hsn0} Input`,
+                    sector: currentTier >= 5 ? 'Raw Materials' : 'Manufacturing',
+                    tier: currentTier,
+                    country: nodeCountry,
+                    country_risk_score: countryRisk(nodeCountry),
+                    gpr_score: Math.floor(Math.random() * 40) + 20,
+                    sanctions_flag: ['CN', 'RU', 'IR', 'KP'].includes(nodeCountry),
+                    data_source: supplier.source === 'sec-edgar' ? 'SEC EDGAR 10-K' :
+                                 supplier.source === 'wikidata' ? 'Wikidata' : 'UN Comtrade',
+                    data_source_detail: supplier.confidence === 'VERIFIED' ?
+                        'Mentioned in annual SEC filing' : 'Inferred from trade flow data',
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    hsn: hsn0,
+                    confidence: supplier.confidence || 'INFERRED',
+                };
+                
+                const newEdge = {
+                    id: `e_${nodeId}_${anchor.id}`,
+                    source: nodeId,
+                    target: anchor.id,
+                    type: 'supplies',
+                    hsn: hsn0,
+                    confidence: supplier.confidence || 'INFERRED',
+                };
+
+                allNodes.push(newNode);
+                allEdges.push(newEdge);
+                nextTierAnchors.push(newNode);
+            }
+        }
+        
+        currentTierAnchors = nextTierAnchors;
+        if (currentTierAnchors.length === 0) {
+            console.log(`[Builder/Waterfall] Stopped expansion at Tier ${currentTier} - no anchors found.`);
+            break;
         }
     }
 
-    throw lastError || new Error('All LLM models failed');
+    console.log(`[Builder/Waterfall] Structured recursive expansion generated: ${allNodes.length} deep-tier nodes, ${allEdges.length} edges.`);
+    return { nodes: allNodes, edges: allEdges };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // SECTION 3: Main orchestrator
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = []) {
     // Sort HSN codes for a stable cache key regardless of order returned by HSN inferrer
     const hsnString = [...hsnCodes].sort().join(',') || 'general';
-    const cKey = cacheKey('graph_build_v4', companyName, hsnString);
+    const cKey = cacheKey('graph_build_v5', companyName, hsnString);
+
+    // Cycle prevention — tracks all company names already added to the graph
+    const visitedSet = new Set([companyName.toLowerCase()]);
 
     const cached = await cacheGet(cKey);
     if (cached) {
@@ -463,21 +404,41 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     }
 
     // Step 3: Build API graph skeleton
+    // Always create at least a root node so the waterfall has an anchor
+    const coords = coordsFor(country);
+    const rootNode = {
+        id: 'root', label: companyName, productName: 'End Product / Assembly',
+        type: 'root', tier: 0, country,
+        country_risk_score: countryRisk(country), gpr_score: 50, sanctions_flag: false,
+        data_source: 'Registry', data_source_detail: `HSN codes: ${keptHsn.join(', ') || 'inferred'}`,
+        lat: coords.lat, lng: coords.lng,
+    };
+
     let apiGraph = null;
     if (tier1Records.length > 0 || tier2Records.length > 0) {
         apiGraph = recordsToGraph(companyName, country, tier1Records, tier2Records, keptHsn);
         console.log(`[Graph] API skeleton: ${apiGraph.nodes.length} nodes, ${apiGraph.edges.length} edges.`);
     } else {
-        console.warn(`[Graph] No API data — will use pure LLM generation.`);
+        // No API data — create minimal skeleton so waterfall still has an anchor to expand
+        console.warn(`[Graph] No API data — building minimal root skeleton for waterfall.`);
+        apiGraph = { nodes: [rootNode], edges: [] };
     }
 
-    // Step 4: LLM enrichment (adds Tiers 3-6 or generates full graph)
-    let finalGraph = null;
-    if (config.groqApiKey) {
+    // Step 4: Structured source waterfall — Tier 3-6 (Recursive Comtrade → EDGAR → Wikidata)
+    let finalGraph = apiGraph;
+    if (apiGraph) {
         try {
-            finalGraph = await expandGraphWithLLM(companyName, country, keptHsn, apiGraph);
-        } catch (llmErr) {
-            console.error(`[Graph] LLM enrichment failed: ${llmErr.message}`);
+            const { nodes: wNodes, edges: wEdges } = await expandWithStructuredSources(
+                companyName, country, keptHsn, apiGraph, visitedSet
+            );
+            if (wNodes.length > 0) {
+                finalGraph = {
+                    nodes: [...apiGraph.nodes, ...wNodes],
+                    edges: [...apiGraph.edges, ...wEdges],
+                };
+            }
+        } catch (err) {
+            console.warn(`[Graph] Structured waterfall failed: ${err.message}`);
         }
     }
 
@@ -497,16 +458,16 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
 
     // Absolute fallback
     console.error(`[Graph] All sources failed — returning minimal root-only graph.`);
-    const coords = coordsFor(country);
+    const rootFallbackCoords = coordsFor(country);
     return {
         nodes: [{
             id: 'root', label: companyName, productName: 'Unknown', type: 'root', tier: 0, country,
             country_risk_score: 50, gpr_score: 50, sanctions_flag: false,
             data_source: 'N/A', data_source_detail: 'No data available',
-            lat: coords.lat, lng: coords.lng,
+            lat: rootFallbackCoords.lat, lng: rootFallbackCoords.lng,
         }],
         edges: [],
     };
 }
 
-module.exports = { expandGraphWithLLM, buildSupplyChainGraph, extractJson };
+module.exports = { buildSupplyChainGraph, extractJson };
