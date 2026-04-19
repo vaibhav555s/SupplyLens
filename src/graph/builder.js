@@ -136,6 +136,7 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         country_risk_score: null, gpr_score: null, sanctions_flag: false,
         data_source: 'Extraction Pipeline', data_source_detail: 'Verified customs & trade records',
         lat: rootCoords.lat, lng: rootCoords.lng,
+        hsn: hsnCodes,
     });
     nodeIds.add('root');
 
@@ -191,25 +192,26 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         });
     }
 
-    // Tier 2 — country-level Comtrade nodes (deduplicated by source_country)
+    // Tier 2 — country-level Comtrade nodes (deduplicated by source_country and hs_code)
     const t2Map = new Map();
     for (const r of tier2Records) {
-        const k = r.source_country;
-        if (!k || k === country) continue;
+        if (!r.source_country || r.source_country === country) continue;
+        const k = `${r.source_country}_${r.hs_code_6}`;
         if (!t2Map.has(k)) t2Map.set(k, { ...r });
         else t2Map.get(k).trade_value += r.trade_value;
     }
 
     let t2i = 0;
-    for (const [srcCountry, r] of t2Map) {
+    for (const [k, r] of t2Map) {
         if (t2i >= 8) break;
-        const id = `t2_${srcCountry.toLowerCase()}`;
+        const srcCountry = r.source_country;
+        const id = `t2_${toNodeId(srcCountry + r.hs_code_6)}`;
         if (nodeIds.has(id)) continue;
         nodeIds.add(id); t2i++;
         const c = coordsFor(srcCountry);
         const sanctioned = ['CN', 'RU', 'IR', 'KP'].includes(srcCountry);
         nodes.push({
-            id, label: `${srcCountry} Suppliers`, productName: r.commodity || hsnCodes[0] || 'Commodity',
+            id, label: `${srcCountry} ${r.hs_code_6 || ''} Suppliers`, productName: r.commodity || hsnCodes[0] || 'Commodity',
             type: 'distributor', tier: 2, country: srcCountry,
             country_risk_score: null,
             gpr_score: null, sanctions_flag: sanctioned,
@@ -217,8 +219,11 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
             data_source_detail: `Trade extraction (2023)`,
             lat: c.lat, lng: c.lng, hsn: r.hs_code_6 || '', confidence: 'INFERRED',
         });
-        const matchingT1 = nodes.find(n => n.tier === 1 && n.country === srcCountry);
+        
+        let matchingT1 = nodes.find(n => n.tier === 1 && n.country === srcCountry && n.hsn === r.hs_code_6);
+        if (!matchingT1) matchingT1 = nodes.find(n => n.tier === 1 && n.country === srcCountry);
         const target = matchingT1 ? matchingT1.id : 'root';
+        
         edges.push({
             id: `e_${id}_${target}`, source: id, target, type: 'supplies',
             hsn: r.hs_code_6 || hsnCodes[0] || '', confidence: 'INFERRED',
@@ -304,9 +309,16 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
             // ── Source 3: Comtrade trade flow inference ──
             if (newSuppliers.length < 2 && hsnCodes.length > 0) {
                 try {
-                    const comtradeRecords = await comtrade.getTopImportPartners(anchorCountry, hsnCodes[0], 2);
+                    let comtradeRecords = [];
+                    for (const hs of hsnCodes) {
+                        const hsRecs = await comtrade.getTopImportPartners(anchorCountry, hs, 2);
+                        comtradeRecords.push(...hsRecs);
+                        // Prevent explosive fanout if a node already has enough deep-tier branches
+                        if (comtradeRecords.length >= 3) break;
+                    }
                     for (const rec of comtradeRecords) {
-                        const name = `${rec.source_country} ${rec.commodity || 'Component'} Mfrs`;
+                        // Tie synthetic name to tier to prevent cycle guard from prematurely blocking recursive depth
+                        const name = `${rec.source_country} ${rec.hs_code_6 || ''} Mfrs T${currentTier}`;
                         if (rec.source_country && !visitedSet.has(name.toLowerCase())) {
                             newSuppliers.push({
                                 name,
@@ -322,9 +334,13 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
             }
 
             // ── Source 4: Wikidata Industry mining ──
-            if (newSuppliers.length < 2) {
+            if (newSuppliers.length < 2 && hsnCodes.length > 0) {
                 try {
-                    const wikidataCompanies = await getCompaniesByIndustryAndCountry(anchorCountry, hsn0, 2);
+                    let wikidataCompanies = [];
+                    for (const hs of hsnCodes) {
+                        wikidataCompanies = await getCompaniesByIndustryAndCountry(anchorCountry, hs, 2);
+                        if (wikidataCompanies.length > 0) break;
+                    }
                     for (const s of wikidataCompanies) {
                         if (!visitedSet.has(s.name.toLowerCase())) {
                             newSuppliers.push({ ...s, source: 'wikidata-industry' });
@@ -443,10 +459,16 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     // TIER 1 FALLBACK: If direct records fail (API block/credits), use trade-flow inference
     if (tier1Records.length === 0 && keptHsn.length > 0) {
         console.log(`[Graph] ⚠ Tier 1 empty (likely API block). Attempting Trade-Flow Fallback for "${companyName}"...`);
-        const fallbackRecs = await comtrade.getTopImportPartners(country, keptHsn[0], 5);
+        let fallbackRecs = [];
+        for (const hs of keptHsn) {
+            const hsRecs = await comtrade.getTopImportPartners(country, hs, 4);
+            fallbackRecs.push(...hsRecs);
+            // Cap to avoid huge unmanageable graphs, but allow processing of multiple BOM inputs
+            if (fallbackRecs.length >= 8) break;
+        }
         tier1Records = fallbackRecs.map(r => ({
             ...r,
-            source_name: `${r.source_country} ${r.commodity || 'Component'} Mfrs`,
+            source_name: `${r.source_country} ${r.hs_code_6 || ''} Mfrs`,
             confidence: 'INFERRED',
             data_source: 'Comtrade Fallback'
         }));
@@ -468,6 +490,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
         country_risk_score: null, gpr_score: null, sanctions_flag: false,
         data_source: 'Extraction Node', data_source_detail: `HSN extraction: ${keptHsn.join(', ') || 'verified'}`,
         lat: coords.lat, lng: coords.lng,
+        hsn: keptHsn,
     };
 
     let apiGraph = null;
@@ -521,6 +544,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
             country_risk_score: null, gpr_score: null, sanctions_flag: false,
             data_source: 'N/A', data_source_detail: 'No extracted data available',
             lat: rootFallbackCoords.lat, lng: rootFallbackCoords.lng,
+            hsn: hsnCodes,
         }],
         edges: [],
     };

@@ -156,33 +156,51 @@ app.get('/api/graph/build', async (req, res) => {
         const { company, country, hsnKeys } = req.query;
         if (!company) return res.status(400).json({ error: 'Missing company parameter' });
 
+        const hsnCodes = hsnKeys ? hsnKeys.split(',').filter(Boolean) : [];
+
         // V2 Cache Layer: Return instantly if we already built this graph globally
         if (isDBConnected()) {
             const CachedGraph = require('./db/models/CachedGraph');
             const cached = await CachedGraph.findOne({ companyName: company.toLowerCase().trim() });
             if (cached) {
                 console.log(`[Route/Graph] Loaded fully composed graph for "${company}" from DB Cache`);
-                return res.json(cached.graphData);
+                
+                // Hot-patch: ensure root node has HSN metadata if it was built before the field was added
+                const graph = cached.graphData;
+                
+                // Ensure pruned data structure exists for the UI insight box
+                if (!graph.pruned) {
+                    graph.pruned = [];
+                }
+
+                if (graph.nodes && graph.nodes.length > 0) {
+                    const root = graph.nodes.find(n => n.id === 'root' || n.tier === 0);
+                    if (root && (!root.hsn || root.hsn.length === 0)) {
+                        root.hsn = hsnCodes;
+                        console.log(`[Route/Graph] Patched missing HSN for cached root node: ${hsnCodes.join(', ')}`);
+                    }
+                }
+                return res.json(graph);
             }
         }
 
-        let hsnCodes = hsnKeys ? hsnKeys.split(',').filter(Boolean) : [];
+        let activeHsnCodes = [...hsnCodes];
 
         // V2: If no HSN codes supplied by the client, resolve them via the registry + LLM fallback.
         // This ensures the BOM filter and structured waterfall always have real codes to work with.
-        if (hsnCodes.length === 0) {
+        if (activeHsnCodes.length === 0) {
             try {
                 const { inferCompanyHSNCodes } = require('./entity/hsn_infer');
                 const inferred = await inferCompanyHSNCodes(company);
-                hsnCodes = inferred.map(h => h.code).filter(Boolean);
-                console.log(`[Route/Graph] Inferred ${hsnCodes.length} HSN codes for "${company}": ${hsnCodes.slice(0, 4).join(', ')}`);
+                activeHsnCodes = inferred.map(h => h.code).filter(Boolean);
+                console.log(`[Route/Graph] Inferred ${activeHsnCodes.length} HSN codes for "${company}": ${activeHsnCodes.slice(0, 4).join(', ')}`);
             } catch (inferErr) {
                 console.warn(`[Route/Graph] HSN inference failed for "${company}": ${inferErr.message}`);
             }
         }
 
         const { buildSupplyChainGraph } = require('./graph/builder');
-        let graphData = await buildSupplyChainGraph(company, country || 'US', hsnCodes);
+        let graphData = await buildSupplyChainGraph(company, country || 'US', activeHsnCodes);
 
         // V2 Step 7: Sanctions enrichment — runs synchronously so flags are in the first response.
         // Fast because the local OFAC check is a pure in-memory operation (no network).

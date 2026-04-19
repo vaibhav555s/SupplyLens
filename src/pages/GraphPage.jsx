@@ -263,7 +263,7 @@ const GraphPage = () => {
         if (mounted) {
           // If nodes came back empty (fallback), ensure it has at least the root node
           if (!generatedGraph.nodes || generatedGraph.nodes.length === 0) {
-            generatedGraph.nodes = [{ id: 'root', label: rootCompany, type: 'root', country, tier: 0, risk_score: 10 }]
+            generatedGraph.nodes = [{ id: 'root', label: rootCompany, type: 'root', country, tier: 0, risk_score: 10, hsn: codes }]
             generatedGraph.edges = []
           }
           setGraphData(generatedGraph)

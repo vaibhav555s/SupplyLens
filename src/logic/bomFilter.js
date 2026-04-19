@@ -15,9 +15,7 @@ const llmChecker = require('./llmChecker');
 const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 const { normalizeToHS6 } = require('../utils/hsn');
 
-// HS chapters that are always irrelevant to manufacturing supply chains.
-// Paper(48), Office plastics(39 partial), Furniture(94), Misc(96), Arms(93)
-const ALWAYS_IRRELEVANT_CHAPTERS = new Set([48, 94, 96, 93, 82]);
+const { isStructuralInput } = require('../utils/hsTree');
 
 /**
  * Get the 4-digit heading prefix from a normalised HS6.
@@ -98,9 +96,13 @@ async function filterBOM(parentHs, candidateHscodes) {
             continue;
         }
 
-        // 2. Always-irrelevant chapter — instant prune
-        if (ALWAYS_IRRELEVANT_CHAPTERS.has(chapter)) {
-            pruned.push({ hsn: cHs6, reason: 'Prefix mismatch — irrelevant HS chapter (office/furniture/paper)' });
+        // 2. hsTree heuristic — deterministic rules (e.g. valid sub-chapters vs. irrelevant chapters)
+        const structuralCheck = isStructuralInput(pHs6, cHs6);
+        if (structuralCheck === true) {
+            kept.push(cHs6);
+            continue;
+        } else if (structuralCheck === false) {
+            pruned.push({ hsn: cHs6, reason: 'Prefix mismatch — structurally irrelevant based on HS hierarchy heuristics' });
             continue;
         }
 

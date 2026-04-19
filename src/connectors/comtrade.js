@@ -104,7 +104,7 @@ function parseComtradeResponse(data, reporterIso, hs6, flowCode) {
     const items = data.data || data || [];
     if (!Array.isArray(items)) return [];
 
-    const records = [];
+    const recordsMap = new Map();
 
     for (const item of items) {
         // Skip world aggregates and self-trade
@@ -117,31 +117,38 @@ function parseComtradeResponse(data, reporterIso, hs6, flowCode) {
         const tradeValue = parseFloat(item.primaryValue || item.tradeValue || item.cifvalue || item.fobvalue || 0);
         const qty = parseFloat(item.netWgt || item.qty || item.grossWgt || 0);
 
-        // Determine source/target based on flow direction
-        const isImport = flowCode === 'M';
+        if (recordsMap.has(partnerIso)) {
+            const existing = recordsMap.get(partnerIso);
+            existing.trade_value += tradeValue;
+            existing.quantity += qty;
+        } else {
+            // Determine source/target based on flow direction
+            const isImport = flowCode === 'M';
 
-        records.push({
-            source_name: partnerIso,  // Country-level node — name is the country code
-            source_country: isImport ? partnerIso : reporterIso,
-            target_name: reporterIso,
-            target_country: isImport ? reporterIso : partnerIso,
-            hs_code: hs6,
-            hs_code_6: hs6,
-            commodity: item.cmdDescE || item.cmdDesc || '',
-            trade_type: isImport ? 'import' : 'export',
-            shipment_count: 0,  // Comtrade doesn't give shipment counts
-            trade_value: tradeValue,
-            quantity: qty,
-            unit: item.qtyUnitAbbr || 'kg',
-            date_range: {
-                start: `${item.period || '2023'}-01-01`,
-                end: `${item.period || '2023'}-12-31`,
-            },
-            data_source: 'comtrade',
-            confidence: 'INFERRED',  // Country-level = inferred
-        });
+            recordsMap.set(partnerIso, {
+                source_name: partnerIso,  // Country-level node — name is the country code
+                source_country: isImport ? partnerIso : reporterIso,
+                target_name: reporterIso,
+                target_country: isImport ? reporterIso : partnerIso,
+                hs_code: hs6,
+                hs_code_6: hs6,
+                commodity: item.cmdDescE || item.cmdDesc || '',
+                trade_type: isImport ? 'import' : 'export',
+                shipment_count: 0,  // Comtrade doesn't give shipment counts
+                trade_value: tradeValue,
+                quantity: qty,
+                unit: item.qtyUnitAbbr || 'kg',
+                date_range: {
+                    start: `${item.period || '2023'}-01-01`,
+                    end: `${item.period || '2023'}-12-31`,
+                },
+                data_source: 'comtrade',
+                confidence: 'INFERRED',  // Country-level = inferred
+            });
+        }
     }
 
+    const records = Array.from(recordsMap.values());
     // Sort by trade value descending (most significant partners first)
     records.sort((a, b) => b.trade_value - a.trade_value);
 
