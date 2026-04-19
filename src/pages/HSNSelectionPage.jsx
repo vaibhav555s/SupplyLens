@@ -8,7 +8,7 @@ import RiskBadge from '../components/UI/RiskBadge'
 import ShimmerButton from '../components/UI/ShimmerButton'
 
 const HSNCard = ({ hsn, selected, onToggle, delay, maxRecords }) => {
-  const pct = (hsn.records / maxRecords) * 100
+  const pct = hsn.records ? (hsn.records / maxRecords) * 100 : 0
 
   return (
     <motion.div
@@ -63,7 +63,7 @@ const HSNCard = ({ hsn, selected, onToggle, delay, maxRecords }) => {
 
       {/* Top row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <span style={{ fontSize: '24px' }}>{hsn.icon}</span>
+        <span style={{ fontSize: '24px' }}>{hsn.icon || '📦'}</span>
         {!selected && <RiskBadge type={hsn.verified ? 'VERIFIED' : 'INFERRED'} size="xs" />}
       </div>
 
@@ -114,7 +114,7 @@ const HSNCard = ({ hsn, selected, onToggle, delay, maxRecords }) => {
           />
         </div>
         <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
-          {hsn.records.toLocaleString()} records
+          {hsn.records ? `${hsn.records.toLocaleString()} records` : 'Extraction pending verification'}
         </div>
       </div>
 
@@ -197,7 +197,7 @@ const HSNSelectionPage = () => {
     })
   }
 
-  const maxRecords = hsnCards.length > 0 ? Math.max(...hsnCards.map(h => h.records)) : 1000;
+  const maxRecords = hsnCards.length > 0 ? Math.max(...hsnCards.map(h => h.records || 0), 0) || 1 : 1;
 
   const handleBeginTraversal = () => {
     const selectedCodes = Array.from(selected)
@@ -291,7 +291,7 @@ const HSNSelectionPage = () => {
               <span>•</span>
             </>
           )}
-          {isLoadingHsn ? 'AI is analyzing entity import records...' : `${hsnCards.reduce((sum, h) => sum + h.records, 0).toLocaleString()} import records pending verification in ${hsnCards.length} HSN categories`}
+          {isLoadingHsn ? 'AI is analyzing entity import records...' : `${hsnCards.reduce((sum, h) => sum + (h.records || 0), 0).toLocaleString()} records analyzed across ${hsnCards.length} HSN categories`}
         </motion.p>
       </div>
 

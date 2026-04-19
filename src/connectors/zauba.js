@@ -44,10 +44,11 @@ async function searchCompany(companyName, tradeType = 'import') {
 
         if (records.length > 0) {
             await cacheSet(key, records, config.cacheTTL.tradeData);
+            console.log(`[Zauba] Found ${records.length} records for "${companyName}"`);
+            return records;
+        } else {
+            throw new Error("No records found (anti-bot block)");
         }
-
-        console.log(`[Zauba] Found ${records.length} records for "${companyName}"`);
-        return records;
     } catch (err) {
         console.error(`[Zauba] Error fetching "${companyName}": ${err.message}`);
         return [];

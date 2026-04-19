@@ -155,15 +155,52 @@ app.get('/api/graph/build', async (req, res) => {
         const { company, country, hsnKeys } = req.query;
         if (!company) return res.status(400).json({ error: 'Missing company parameter' });
 
-        const hsnCodes = hsnKeys ? hsnKeys.split(',') : [];
-        const { buildSupplyChainGraph } = require('./graph/builder');
+        let hsnCodes = hsnKeys ? hsnKeys.split(',').filter(Boolean) : [];
 
-        const graphData = await buildSupplyChainGraph(company, country || 'US', hsnCodes);
+        // V2: If no HSN codes supplied by the client, resolve them via the registry + LLM fallback.
+        // This ensures the BOM filter and structured waterfall always have real codes to work with.
+        if (hsnCodes.length === 0) {
+            try {
+                const { inferCompanyHSNCodes } = require('./entity/hsn_infer');
+                const inferred = await inferCompanyHSNCodes(company);
+                hsnCodes = inferred.map(h => h.code).filter(Boolean);
+                console.log(`[Route/Graph] Inferred ${hsnCodes.length} HSN codes for "${company}": ${hsnCodes.slice(0, 4).join(', ')}`);
+            } catch (inferErr) {
+                console.warn(`[Route/Graph] HSN inference failed for "${company}": ${inferErr.message}`);
+            }
+        }
+
+        const { buildSupplyChainGraph } = require('./graph/builder');
+        let graphData = await buildSupplyChainGraph(company, country || 'US', hsnCodes);
+
+        // V2 Step 7: Sanctions enrichment — runs synchronously so flags are in the first response.
+        // Fast because the local OFAC check is a pure in-memory operation (no network).
+        try {
+            const { enrichGraphWithSanctions, getSanctionsSummary } = require('./enrichment/sanctions');
+            graphData.nodes = await enrichGraphWithSanctions(graphData.nodes);
+            graphData.sanctions_summary = getSanctionsSummary(graphData.nodes);
+            console.log(`[Route/Graph] Sanctions done. Summary: ${JSON.stringify(graphData.sanctions_summary)}`);
+        } catch (sanctionsErr) {
+            console.warn(`[Route/Graph] Sanctions enrichment failed: ${sanctionsErr.message}`);
+        }
+
+        // V2 Step 8: Risk enrichment — replaces random countryRisk() stubs with real
+        // World Bank WGI + GPR composite scores. Parallelizes per unique country.
+        try {
+            const { enrichGraphWithRisk, getRiskSummary } = require('./enrichment/risk');
+            graphData.nodes = await enrichGraphWithRisk(graphData.nodes);
+            graphData.risk_summary = getRiskSummary(graphData.nodes);
+            console.log(`[Route/Graph] Risk done. Avg: ${graphData.risk_summary.avg_risk} breakdown=${JSON.stringify(graphData.risk_summary.breakdown)}`);
+        } catch (riskErr) {
+            console.warn(`[Route/Graph] Risk enrichment failed: ${riskErr.message}`);
+        }
+
         res.json(graphData);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // Dynamically generate an alternative supplier (AI Pivot)
 app.get('/api/graph/resource', async (req, res) => {
@@ -175,6 +212,81 @@ app.get('/api/graph/resource', async (req, res) => {
 
         const graphData = await generateAlternativeSupplier(nodeId, hsn, parseInt(tier) || 1, parentId);
         res.json(graphData);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── V2 Step 9+10: Disruption Simulation Endpoints ───────────────────────────
+
+/**
+ * POST /api/graph/disrupt
+ * Body: { nodeId, nodes, edges }
+ *
+ * Simulates the cascading impact of disrupting a single supply chain node.
+ * The caller passes the enriched graph (nodes + edges from /api/graph/build)
+ * and the ID of the node to disrupt. Returns full BFS cascade analysis.
+ */
+app.post('/api/graph/disrupt', (req, res) => {
+    try {
+        const { nodeId, nodes, edges } = req.body;
+        if (!nodeId) return res.status(400).json({ error: 'Missing nodeId in request body' });
+        if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+            return res.status(400).json({ error: 'nodes and edges must be arrays' });
+        }
+
+        const { simulateDisruption } = require('./graph/disruption');
+        const result = simulateDisruption(nodeId, nodes, edges);
+
+        console.log(`[Disrupt] Node "${nodeId}" → severity=${result.summary?.severity} affected=${result.summary?.affected_count}`);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/graph/scan
+ * Body: { nodes, edges }
+ *
+ * Automatically scans all high-risk nodes in the graph and returns ranked
+ * disruption scenarios. Used for the "Vulnerability Scan" dashboard feature.
+ */
+app.post('/api/graph/scan', (req, res) => {
+    try {
+        const { nodes, edges } = req.body;
+        if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+            return res.status(400).json({ error: 'nodes and edges must be arrays' });
+        }
+
+        const { autoScanVulnerabilities, findSinglePointsOfFailure } = require('./graph/disruption');
+        const scenarios = autoScanVulnerabilities(nodes, edges);
+        const spofs = findSinglePointsOfFailure(nodes, edges);
+
+        console.log(`[Scan] ${scenarios.length} vulnerability scenarios, ${spofs.length} SPOFs identified.`);
+        res.json({ scenarios, spofs, scanned_nodes: nodes.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/graph/spof
+ * Body: { nodes, edges }
+ *
+ * Returns only the Single Point of Failure analysis (lighter than full scan).
+ */
+app.post('/api/graph/spof', (req, res) => {
+    try {
+        const { nodes, edges } = req.body;
+        if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+            return res.status(400).json({ error: 'nodes and edges must be arrays' });
+        }
+
+        const { findSinglePointsOfFailure } = require('./graph/disruption');
+        const spofs = findSinglePointsOfFailure(nodes, edges);
+
+        res.json({ spofs, count: spofs.length });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

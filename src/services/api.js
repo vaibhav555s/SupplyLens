@@ -43,6 +43,40 @@ const api = {
     },
 
     /**
+     * Simulate a specific disruption cascading through the graph (V2)
+     */
+    async simulateDisruption(nodeId, disruptionType, graphData) {
+        const response = await fetch('/api/graph/disrupt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nodeId,
+                disruptionType,
+                nodes: graphData.nodes,
+                edges: graphData.edges
+            })
+        });
+        if (!response.ok) throw new Error('Disruption simulation failed');
+        return await response.json();
+    },
+
+    /**
+     * Scan the entire graph for SPOFs and structural vulnerabilities (V2)
+     */
+    async vulnerabilityScan(graphData) {
+        const response = await fetch('/api/graph/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nodes: graphData.nodes,
+                edges: graphData.edges
+            })
+        });
+        if (!response.ok) throw new Error('Vulnerability scan failed');
+        return await response.json();
+    },
+
+    /**
      * Search for shipments (Module 1 - ImportYeti)
      */
     async getShipments(company) {
