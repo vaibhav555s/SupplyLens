@@ -250,7 +250,15 @@ const GraphPage = () => {
 
         setIsBuildingGraph(true)
         const api = (await import('../services/api')).default;
-        const generatedGraph = await api.buildGraph(rootCompany, country, codes)
+
+        const startTime = Date.now();
+        const generatedGraph = await api.buildGraph(rootCompany, country, codes);
+
+        // Enforce a minimum 6.5 second delay so the TerminalLoader aesthetic animation plays out
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 6500) {
+          await new Promise(resolve => setTimeout(resolve, 6500 - elapsed));
+        }
 
         if (mounted) {
           // If nodes came back empty (fallback), ensure it has at least the root node
@@ -263,7 +271,7 @@ const GraphPage = () => {
           try {
             const scan = await api.vulnerabilityScan(generatedGraph);
             if (mounted) setScanResults(scan);
-          } catch(e) { console.warn('Scan failed', e); }
+          } catch (e) { console.warn('Scan failed', e); }
 
           setIsBuildingGraph(false)
 
@@ -324,7 +332,7 @@ const GraphPage = () => {
     try {
       const api = (await import('../services/api')).default;
       const res = await api.simulateDisruption(node.id, type, graphData);
-      
+
       // Use the nodes from the cascade
       const disruptedIds = res.cascade.map(c => c.id);
       setDisruptions(disruptedIds);
@@ -357,42 +365,42 @@ const GraphPage = () => {
 
     setIsResolvingReroute(true);
     try {
-        const api = (await import('../services/api')).default;
-        const newData = await api.resourceSupplier(nodeId, hsn, disruptedNode.tier, parentId);
-        
-        if (newData && Array.isArray(newData.nodes) && Array.isArray(newData.edges)) {
-            const newNode = newData.nodes[0];
-            const newEdges = [...newData.edges];
-            if (newNode) {
-                // Find downstream children suppliers that currently point to the disrupted node
-                const childrenEdges = graphData.edges.filter(e => e.target === nodeId);
-                childrenEdges.forEach(e => {
-                    newEdges.push({
-                        ...e,
-                        id: `e_reroute_${e.source}_${newNode.id}_${Date.now()}`,
-                        target: newNode.id,
-                        confidence: 'VERIFIED',
-                        _isNewPivot: true // Marker for neon green styling
-                    });
-                });
-            }
+      const api = (await import('../services/api')).default;
+      const newData = await api.resourceSupplier(nodeId, hsn, disruptedNode.tier, parentId);
 
-            const taggedNodes = newData.nodes.map(n => ({ ...n, _isNewPivot: true }));
-
-            setGraphData(prev => ({
-                nodes: [...prev.nodes, ...taggedNodes],
-                edges: [...prev.edges, ...newEdges]
-            }));
-            
-            // Mark the disrupted node as permanently bypassed/cancelled
-            setResolvedDisruptions(prev => [...prev, nodeId]);
-            setDisruptions([]);
-            setShowToast(false);
+      if (newData && Array.isArray(newData.nodes) && Array.isArray(newData.edges)) {
+        const newNode = newData.nodes[0];
+        const newEdges = [...newData.edges];
+        if (newNode) {
+          // Find downstream children suppliers that currently point to the disrupted node
+          const childrenEdges = graphData.edges.filter(e => e.target === nodeId);
+          childrenEdges.forEach(e => {
+            newEdges.push({
+              ...e,
+              id: `e_reroute_${e.source}_${newNode.id}_${Date.now()}`,
+              target: newNode.id,
+              confidence: 'VERIFIED',
+              _isNewPivot: true // Marker for neon green styling
+            });
+          });
         }
-    } catch(err) {
-        console.error("AI Reroute failed", err);
+
+        const taggedNodes = newData.nodes.map(n => ({ ...n, _isNewPivot: true }));
+
+        setGraphData(prev => ({
+          nodes: [...prev.nodes, ...taggedNodes],
+          edges: [...prev.edges, ...newEdges]
+        }));
+
+        // Mark the disrupted node as permanently bypassed/cancelled
+        setResolvedDisruptions(prev => [...prev, nodeId]);
+        setDisruptions([]);
+        setShowToast(false);
+      }
+    } catch (err) {
+      console.error("AI Reroute failed", err);
     } finally {
-        setIsResolvingReroute(false);
+      setIsResolvingReroute(false);
     }
   }
 
