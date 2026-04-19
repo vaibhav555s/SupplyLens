@@ -220,7 +220,7 @@ const HSNSelectionPage = () => {
     }}>
       {/* Header */}
       <div style={{
-        padding: '80px 40px 24px',
+        padding: '90px 40px 24px',
         borderBottom: '1px solid rgba(139,92,246,0.1)',
         background: 'rgba(8,8,15,0.9)',
         flexShrink: 0,
