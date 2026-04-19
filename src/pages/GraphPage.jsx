@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Zap, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Zap, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, FileDown } from 'lucide-react'
 import SupplyGraph from '../components/Graph/SupplyGraph'
 import GeoMap from '../components/Map/GeoMap'
 import NodeDetailPanel from '../components/Graph/NodeDetailPanel'
@@ -534,6 +534,38 @@ const GraphPage = () => {
               📦 Tracing: {hsnCodes?.length > 0 ? hsnCodes.join(' · ') : 'Electronic integrated circuits (8542)'}
             </div>
           </div>
+
+          {/* Download PDF Report — only visible after graph loads */}
+          {!isBuildingGraph && (
+            <button
+              onClick={async () => {
+                const { generateSupplyChainPDF } = await import('../utils/pdfExport')
+                generateSupplyChainPDF(companyName, graphData, hsnCodes)
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.08))',
+                border: '1px solid rgba(16,185,129,0.3)',
+                borderRadius: '12px',
+                color: '#4ade80',
+                cursor: 'pointer',
+                padding: '10px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                fontFamily: 'Inter, sans-serif',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.15))'}
+              onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.08))'}
+            >
+              <FileDown size={14} />
+              Download Report
+            </button>
+          )}
 
           {/* ─── TIER CONTROLS ─── */}
           <div>
