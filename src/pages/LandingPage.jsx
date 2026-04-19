@@ -127,7 +127,7 @@ const LandingPage = () => {
         transform: 'translate(-50%, -50%)',
         fontSize: '30vw',
         fontWeight: 900,
-        color: 'rgba(255,255,255,0.055)',
+        color: 'rgba(255,255,255,0.03)',
         letterSpacing: '-0.05em',
         fontFamily: "'Sora', sans-serif",
         zIndex: 1,
@@ -144,7 +144,7 @@ const LandingPage = () => {
         position: 'absolute',
         top: '35%', /* Adjusted to match ghost text/chain center */
         left: '50%',
-        transform: 'translate(-50%, -65%)',
+        transform: 'translate(-50%, -105%)',
         zIndex: 2,
         display: 'flex',
         flexDirection: 'column',
@@ -161,13 +161,13 @@ const LandingPage = () => {
           custom={0.1}
           style={{
             fontFamily: "'Sora', sans-serif",
-            fontSize: 'clamp(72px, 9vw, 110px)',
+            fontSize: 'clamp(42px, 5vw, 64px)',
             fontWeight: 800,
             color: '#fff',
             letterSpacing: '-0.025em',
             textAlign: 'center',
             margin: '0',
-            lineHeight: 1.1,
+            lineHeight: 1.05,
           }}
         >
           See beyond your suppliers
@@ -180,8 +180,8 @@ const LandingPage = () => {
           custom={0.2}
           style={{
             fontFamily: "'Sora', sans-serif",
-            fontSize: 'clamp(66px, 8vw, 100px)',
-            fontWeight: 700,
+            fontSize: 'clamp(38px, 4.5vw, 58px)',
+            fontWeight: 800,
             fontStyle: 'italic',
             textAlign: 'center',
             marginTop: '4px',
@@ -202,7 +202,7 @@ const LandingPage = () => {
         transition={{ duration: 2, ease: "easeOut" }}
         style={{
           position: 'relative',
-          top: '80px',
+          top: '160px',
           width: '100%',
           height: '60vh', 
           zIndex: 3,
@@ -271,7 +271,7 @@ const LandingPage = () => {
 
       {/* 4. THE BOTTOM CONTENT (z-index 4) */}
       <div style={{
-        marginTop: '24px',
+        marginTop: '32px',
         zIndex: 4,
         display: 'flex',
         flexDirection: 'column',
@@ -308,26 +308,6 @@ const LandingPage = () => {
           Supply Intelligence Platform
         </motion.div>
 
-        {/* Subtext */}
-        <motion.p
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          custom={0.3}
-          style={{
-            textAlign: 'center',
-            color: 'rgba(255,255,255,0.38)',
-            fontSize: '14px',
-            fontFamily: "'Inter', sans-serif",
-            fontWeight: 400,
-            lineHeight: 1.7,
-            maxWidth: '400px',
-            margin: '0 0 24px 0',
-          }}
-        >
-          Trace N-tier supply chains from open trade data. 
-          Identify risks. Simulate disruptions.
-        </motion.p>
 
         {/* Search bar */}
         <motion.div
