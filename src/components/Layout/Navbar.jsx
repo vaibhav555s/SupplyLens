@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 const NAV_ITEMS = [
   { label: 'Search', path: '/' },
   { label: 'Graph', path: '/graph' },
-  { label: 'Map', path: '/graph?view=map' },
+  { label: 'Map', path: '/graph', state: { view: 'map' } },
   { label: 'Dashboard', path: '/dashboard' },
 ]
 
@@ -16,10 +16,19 @@ const Navbar = () => {
   const location = useLocation()
   const { user, logout } = useAuth()
 
-  const isActive = (path) => {
-    if (path === '/') return location.pathname === '/'
-    if (path.startsWith('/graph')) return location.pathname === '/graph'
-    return location.pathname.startsWith(path)
+  const isActive = (item) => {
+    if (item.path === '/') return location.pathname === '/'
+    const baseMatch = location.pathname.startsWith(item.path.split('?')[0])
+    if (!baseMatch) return false
+    
+    // For /graph, distinguish by view state
+    if (item.path === '/graph') {
+      const currentView = location.state?.view || 'graph'
+      const itemView = item.state?.view || 'graph'
+      return currentView === itemView
+    }
+    
+    return true
   }
 
   return (
@@ -89,11 +98,11 @@ const Navbar = () => {
       {/* 2. Nav items */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
         {NAV_ITEMS.map((item) => {
-          const active = isActive(item.path)
+          const active = isActive(item)
           return (
             <button
               key={item.label}
-              onClick={() => navigate(item.path)}
+              onClick={() => navigate(item.path, { state: item.state })}
               style={{
                 position: 'relative',
                 background: active ? 'rgba(124, 58, 237, 0.15)' : 'none',

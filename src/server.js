@@ -11,7 +11,7 @@ const User = require('./db/models/User');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ─── Health Check ───
 app.get('/api/health', (req, res) => {
@@ -569,6 +569,27 @@ app.post('/api/dashboard/save', authMiddleware, async (req, res) => {
         res.json(entry);
     } catch (err) {
         console.error('[Dashboard] Save error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Save a generated PDF report for the authenticated user
+app.post('/api/dashboard/save-report', authMiddleware, async (req, res) => {
+    try {
+        if (!isDBConnected()) return res.status(503).json({ error: 'Database not connected' });
+        const SavedReport = require('./db/models/SavedReport');
+        const { companyName, pdfBase64 } = req.body;
+        if (!companyName || !pdfBase64) return res.status(400).json({ error: 'Missing companyName or pdfBase64' });
+
+        const report = await SavedReport.findOneAndUpdate(
+            { userId: req.userId, companyName },
+            { userId: req.userId, companyName, pdfBase64 },
+            { upsert: true, returnDocument: 'after' }
+        );
+        console.log(`[Report] Saved PDF report for user ${req.userId}: "${companyName}"`);
+        res.json({ success: true, id: report._id });
+    } catch (err) {
+        console.error('[Report] Save error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
