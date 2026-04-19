@@ -81,60 +81,67 @@ const LandingPage = () => {
   return (
     <div style={{
       width: '100%',
-      height: '100%',
+      minHeight: '100vh',
+      height: '100vh', // Force one screen
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
-      overflowX: 'hidden',
-      overflowY: 'auto',
-      background: '#020617', // Ensure solid dark background
+      overflow: 'hidden', // No scroll on desktop
+      background: '#020617', 
     }}>
       <AmbientBackground />
 
-      {/* Spline 3D Hero Section */}
+      {/* Immersive 3D Background Overlap */}
       <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.5, delay: 0.5 }}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 2.5, ease: "easeOut" }}
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '650px',
+          inset: 0,
           zIndex: 1,
-          pointerEvents: 'none', // Allows scrolling and clicking through to search
-          maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', // Smooth fade at bottom
-          WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          opacity: 0.7,
         }}
       >
-        <iframe 
-          src="https://my.spline.design/blockchain-iGofSppMfDjRUEBbyrBEhju5/" 
-          frameBorder="0" 
-          width="100%" 
-          height="100%"
-          loading="lazy"
-          title="Blockchain Spline Model"
-          style={{ 
-            opacity: 0.7,
-            transform: 'scale(1.1)', // Slight zoom for impact
-          }}
-        />
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transform: 'scale(2.2)', // Huge scale for full-width impact
+          filter: 'contrast(1.2) brightness(1.1)',
+          maskImage: 'radial-gradient(circle, black 40%, transparent 80%)',
+          WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 80%)',
+        }}>
+          <iframe 
+            src="https://my.spline.design/blockchain-iGofSppMfDjRUEBbyrBEhju5/" 
+            frameBorder="0" 
+            width="100%" 
+            height="100%"
+            loading="lazy"
+            title="Centered Blockchain Model"
+          />
+        </div>
       </motion.div>
+
 
       <div style={{
         position: 'relative',
-        zIndex: 10, // Ensure content is above Spline
+        zIndex: 10,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '24px',
-        maxWidth: '800px', // Wider to accommodate the visual weight
+        gap: '20px', // Tightened gap
+        maxWidth: '1200px',
         width: '100%',
-        paddingBottom: '100px', // Spacer for the hero model
-        marginTop: '80px', // Adjust for centering model visually
+        padding: '40px 20px',
       }}>
         {/* Eyebrow */}
         <motion.div
@@ -146,15 +153,16 @@ const LandingPage = () => {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '8px',
-            background: 'rgba(139,92,246,0.08)',
+            background: 'rgba(139,92,246,0.1)',
             border: '1px solid rgba(139,92,246,0.3)',
             borderRadius: '999px',
             padding: '6px 16px',
-            fontSize: '13px',
+            fontSize: '12px',
             color: '#a855f7',
             fontFamily: 'Inter, sans-serif',
-            letterSpacing: '0.06em',
-            fontWeight: 500,
+            letterSpacing: '0.1em',
+            fontWeight: 600,
+            textTransform: 'uppercase',
           }}
         >
           <span style={{ fontSize: '14px' }}>◈</span>
@@ -162,7 +170,7 @@ const LandingPage = () => {
         </motion.div>
 
         {/* Hero heading */}
-        <div style={{ textAlign: 'center', lineHeight: 1.1 }}>
+        <div style={{ textAlign: 'center', lineHeight: 1.0, zIndex: 11 }}>
           <motion.div
             variants={fadeUp}
             initial="hidden"
@@ -170,11 +178,11 @@ const LandingPage = () => {
             custom={0.1}
             style={{
               fontFamily: 'Sora, sans-serif',
-              fontSize: 'clamp(52px, 7vw, 88px)',
+              fontSize: 'clamp(42px, 5.5vw, 68px)', // Scaled down
               fontWeight: 800,
               color: '#f8fafc',
-              letterSpacing: '-0.03em',
-              lineHeight: 1.0,
+              letterSpacing: '-0.04em',
+              lineHeight: 0.9,
             }}
           >
             See Beyond
@@ -186,10 +194,10 @@ const LandingPage = () => {
             custom={0.2}
             style={{
               fontFamily: 'Sora, sans-serif',
-              fontSize: 'clamp(52px, 7vw, 88px)',
+              fontSize: 'clamp(42px, 5.5vw, 68px)', // Scaled down
               fontWeight: 800,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.15,
+              letterSpacing: '-0.04em',
+              lineHeight: 1.0,
               marginTop: '4px',
             }}
           >
@@ -203,12 +211,13 @@ const LandingPage = () => {
             custom={0.35}
             style={{
               fontFamily: 'Sora, sans-serif',
-              fontSize: 'clamp(38px, 5.5vw, 72px)',
+              fontSize: 'clamp(32px, 4.5vw, 56px)', // Scaled down
               fontWeight: 300,
               fontStyle: 'italic',
               color: '#a855f7',
               letterSpacing: '-0.02em',
-              marginTop: '-4px',
+              marginTop: '2px',
+              textShadow: '0 0 40px rgba(168,85,247,0.3)',
             }}
           >
             Intelligence
@@ -224,11 +233,13 @@ const LandingPage = () => {
           style={{
             textAlign: 'center',
             color: '#94a3b8',
-            fontSize: '17px',
+            fontSize: '14px',
             fontFamily: 'Inter, sans-serif',
             fontWeight: 400,
-            lineHeight: 1.7,
+            lineHeight: 1.6,
             maxWidth: '480px',
+            margin: '0 auto',
+            opacity: 0.9,
           }}
         >
           Trace N-tier supply chains from open trade data.
