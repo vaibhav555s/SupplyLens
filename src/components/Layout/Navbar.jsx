@@ -40,7 +40,7 @@ const Navbar = () => {
         WebkitBackdropFilter: 'blur(24px)',
         border: '1px solid rgba(139, 92, 246, 0.18)',
         borderRadius: '999px',
-        padding: '8px 20px',
+        padding: '10px 24px',
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
@@ -61,30 +61,30 @@ const Navbar = () => {
         }}
       >
         <div style={{
-          width: '24px',
-          height: '24px',
+          width: '28px',
+          height: '28px',
           background: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
           borderRadius: '6px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '12px',
+          fontSize: '14px',
         }}>
           ◈
         </div>
         <span style={{
           fontFamily: 'Sora, sans-serif',
           fontWeight: 700,
-          fontSize: '13px',
+          fontSize: '15px',
           color: '#f8fafc',
           letterSpacing: '-0.02em',
         }}>
-          X-Ray
+          SupplyLens
         </span>
       </button>
 
       {/* Divider */}
-      <div style={{ width: '1px', height: '16px', background: 'rgba(139, 92, 246, 0.2)' }} />
+      <div style={{ width: '1px', height: '20px', background: 'rgba(139, 92, 246, 0.2)' }} />
 
       {/* 2. Nav items */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
@@ -100,9 +100,9 @@ const Navbar = () => {
                 border: active ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid transparent',
                 borderRadius: '999px',
                 cursor: 'pointer',
-                padding: '6px 14px',
+                padding: '8px 16px',
                 fontFamily: 'Inter, sans-serif',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: active ? 600 : 400,
                 color: active ? '#f8fafc' : '#94a3b8',
                 letterSpacing: '0.01em',
@@ -137,13 +137,13 @@ const Navbar = () => {
       </div>
 
       {/* Divider */}
-      <div style={{ width: '1px', height: '16px', background: 'rgba(139, 92, 246, 0.2)' }} />
+      <div style={{ width: '1px', height: '20px', background: 'rgba(139, 92, 246, 0.2)' }} />
 
       {/* 3. Auth State */}
       <div style={{ padding: '0 4px 0 12px', display: 'flex', alignItems: 'center' }}>
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#f8fafc', fontWeight: 600 }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#f8fafc', fontWeight: 600 }}>
               {user.username}
             </span>
             <button
@@ -151,10 +151,10 @@ const Navbar = () => {
               style={{
                 background: 'none', border: 'none', color: '#ef4444',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                fontFamily: 'Inter, sans-serif', fontSize: '12px', padding: '4px'
+                fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '6px'
               }}
             >
-              <LogOut size={14} /> Log out
+              <LogOut size={16} /> Log out
             </button>
           </div>
         ) : (
@@ -166,9 +166,9 @@ const Navbar = () => {
               borderRadius: '999px',
               color: '#f8fafc',
               cursor: 'pointer',
-              padding: '6px 14px',
+              padding: '8px 16px',
               fontFamily: 'Inter, sans-serif',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: 600,
             }}
           >

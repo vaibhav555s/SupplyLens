@@ -1,4 +1,4 @@
-// ─── Supply Chain X-Ray API Server ───
+// ─── SupplyLens API Server ───
 // Express server exposing REST endpoints for Module 1 & 2.
 
 const express = require('express');
@@ -451,7 +451,7 @@ app.listen(config.port, async () => {
     await connectDB();
 
     console.log(`
-  ⬡ Supply Chain X-Ray API Server
+  ⬡ SupplyLens API Server
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:     ${config.port}
   Env:      ${config.nodeEnv}

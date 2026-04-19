@@ -61,7 +61,7 @@ const TerminalLoader = ({ companyName }) => {
           marginBottom: '12px',
           fontWeight: 700,
         }}>
-          Supply Chain X-Ray · Intelligence Engine
+          SupplyLens · Intelligence Engine
         </div>
 
         {/* Scanning orb */}
