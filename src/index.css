@@ -50,7 +50,20 @@ html, body {
 /* Ambient orb breathing animation */
 @keyframes orb-breathe {
   0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.75; transform: scale(1.08); }
+  50% { opacity: 0.75; transform: scale(1.1); }
+}
+
+/* Floating animation for tags */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Pulsing dot animation */
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(0.95); opacity: 1; }
 }
 
 /* Risk node pulse animations */
