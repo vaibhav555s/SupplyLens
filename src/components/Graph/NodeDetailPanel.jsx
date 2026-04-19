@@ -217,11 +217,11 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
               {node.flag || '🌐'}
             </div>
             <div>
-              <div style={{ 
-                fontSize: '18px', 
-                fontWeight: 800, 
-                color: '#f1f5f9', 
-                fontFamily: 'Sora, sans-serif', 
+              <div style={{
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#f1f5f9',
+                fontFamily: 'Sora, sans-serif',
                 lineHeight: 1.2,
                 wordBreak: 'break-word',
                 maxWidth: '220px'
@@ -235,10 +235,10 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
                   </div>
                 )}
                 {node.productName && (
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: '#38bdf8', 
-                    fontFamily: 'JetBrains Mono, monospace', 
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#38bdf8',
+                    fontFamily: 'JetBrains Mono, monospace',
                     fontWeight: 600,
                     textTransform: 'uppercase',
                     letterSpacing: '0.02em'
@@ -362,7 +362,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
           />
         )}
       </div>
- 
+
       {/* ─── BOM CLEANSE (NEW) ─── */}
       {node.tier === 0 && prunedNodes && prunedNodes.length > 0 && (() => {
         // --- Enhanced Helpers for Demo Intelligence ---
@@ -398,7 +398,7 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
         const getSmartReason = (item, parentHS) => {
           const reason = item.reason || '';
           const candidateHS = item.hsn;
-          
+
           const getIndustry = (hs) => {
             if (!hs) return null;
             const p = String(hs).substring(0, 4);
@@ -423,12 +423,12 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
           if (segment.includes('office') || segment.includes('stationery')) return 'Office supplies (non-production)';
           if (segment.includes('packaging') && !segment.includes('specialized')) return 'Standard non-specialized packaging';
           if (segment.includes('safety') || segment.includes('protective')) return 'Safety gear (not a material input)';
-          
+
           // Priority 3: Shortest punchy summary from text
           let summary = reason.replace(/^YES\/NO\s*[|:-]\s*/i, '');
           const periodIdx = summary.indexOf('.');
           if (periodIdx > 10) summary = summary.substring(periodIdx + 1).trim();
-          
+
           if (summary.length > 55) summary = summary.substring(0, 52) + '...';
           return summary || 'Not a direct production input';
         };
@@ -450,19 +450,19 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
               </span>
             </div>
             <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6, fontFamily: 'Inter, sans-serif', marginBottom: '16px' }}>
-              Filtered trade flows to exclude <span style={{ color: '#4ade80', fontWeight: 700 }}>{prunedNodes.length}</span> non-material inputs 
+              Filtered trade flows to exclude <span style={{ color: '#4ade80', fontWeight: 700 }}>{prunedNodes.length}</span> non-material inputs
               for higher graph fidelity.
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {prunedNodes.slice(0, 5).map((item, idx) => {
                 const productName = item.name && item.name !== 'Unknown' ? item.name : deriveNameFromHS(item.hsn);
                 const reasonText = getSmartReason(item, parentHSN);
 
                 return (
-                  <div 
+                  <div
                     key={`${item.hsn}-${idx}`}
-                    style={{ 
+                    style={{
                       padding: '10px 12px',
                       background: 'rgba(255,255,255,0.02)',
                       borderRadius: '10px',
@@ -482,16 +482,16 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ 
-                        fontSize: '9px', 
-                        color: '#4ade80', 
-                        fontWeight: 900, 
+                      <span style={{
+                        fontSize: '9px',
+                        color: '#4ade80',
+                        fontWeight: 900,
                         letterSpacing: '0.05em',
                       }}>
                         HS {item.hsn}
                       </span>
-                      <div style={{ 
-                        fontSize: '8px', 
+                      <div style={{
+                        fontSize: '8px',
                         padding: '2px 5px',
                         borderRadius: '4px',
                         background: 'rgba(248,113,113,0.1)',
@@ -500,19 +500,19 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
                         textTransform: 'uppercase'
                       }}>Pruned</div>
                     </div>
-                    
-                    <div style={{ 
-                      fontSize: '13px', 
-                      color: '#f8fafc', 
+
+                    <div style={{
+                      fontSize: '13px',
+                      color: '#f8fafc',
                       fontWeight: 600,
                       fontFamily: 'Outfit, sans-serif',
                     }}>
                       {productName}
                     </div>
-                    
-                    <div style={{ 
-                      fontSize: '11px', 
-                      color: '#94a3b8', 
+
+                    <div style={{
+                      fontSize: '11px',
+                      color: '#94a3b8',
                       fontFamily: 'Inter, sans-serif',
                       lineHeight: 1.4,
                       marginTop: '2px',
@@ -526,12 +526,12 @@ const NodeDetailPanel = ({ node, onSimulate, onViewMap, rootCompany, hsnCodes, p
                   </div>
                 );
               })}
-              
+
               {prunedNodes.length > 5 && (
-                <div style={{ 
-                  fontSize: '11px', 
-                  color: '#475569', 
-                  textAlign: 'center', 
+                <div style={{
+                  fontSize: '11px',
+                  color: '#475569',
+                  textAlign: 'center',
                   padding: '8px 0',
                   fontWeight: 600,
                   fontFamily: 'Inter, sans-serif'

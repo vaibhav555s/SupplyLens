@@ -35,15 +35,15 @@ async function searchCompany(companyName) {
     }
 
     try {
-        console.log(`[ImportYeti/Apify] Requesting parseforge~importyeti-scraper for "${companyName}" (waiting up to 4 minutes...)`);
-        const apifyUrl = `https://api.apify.com/v2/acts/parseforge~importyeti-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}&timeout=240`;
+        console.log(`[ImportYeti/Apify] Requesting parseforge~importyeti-scraper for "${companyName}" (waiting up to 2 minutes...)`);
+        const apifyUrl = `https://api.apify.com/v2/acts/parseforge~importyeti-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}&timeout=120`;
         
         const response = await httpPost(apifyUrl, {
             q: companyName,
             maxItems: 50
         }, {
             source: 'apify',
-            timeout: 240000 // up to 4 minutes for Apify to scrape real data
+            timeout: 130000 // Reduced timeout to 2 minutes
         });
 
         let records = [];

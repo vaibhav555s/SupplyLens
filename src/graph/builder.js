@@ -144,14 +144,21 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
     // Prefix filter (4 digits) to stay within the same component category
     const hsnFilter = (hsnCodes || []).map(code => String(code).substring(0, 4)).filter(Boolean);
 
+    let skippedCount = 0;
     for (const r of tier1Records) {
         if (!r.source_name) continue;
 
-        // NEW: Filter Tier 1 by selected HSN category if codes are provided
+        // RELAXED HSN FILTER: Try 4-digit prefix first, fallback to 2-digit if no matches
         if (hsnFilter.length > 0 && r.hs_code_6) {
-            const shipHsnPrefix = String(r.hs_code_6).substring(0, 4);
-            if (!hsnFilter.includes(shipHsnPrefix)) {
-                // Skip records that don't match the user's selected component category
+            const shipHsnPrefix4 = String(r.hs_code_6).substring(0, 4);
+            const shipHsnPrefix2 = String(r.hs_code_6).substring(0, 2);
+
+            const isMatch4 = hsnFilter.includes(shipHsnPrefix4);
+            const isMatch2 = hsnFilter.map(f => f.substring(0, 2)).includes(shipHsnPrefix2);
+
+            if (!isMatch4 && !isMatch2) {
+                // Skip records that don't match even the 2-digit category
+                skippedCount++;
                 continue;
             }
         }
@@ -160,6 +167,7 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         if (!t1Map.has(k)) t1Map.set(k, r);
         else t1Map.get(k).shipment_count += (r.shipment_count || 0);
     }
+    if (skippedCount > 0) console.log(`[Builder] Skipped ${skippedCount} Tier 1 records due to HSN mismatch.`);
 
     let t1i = 0;
     for (const [, r] of t1Map) {
@@ -248,13 +256,14 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
         .sort((a, b) => a.tier - b.tier);
 
     if (currentTierAnchors.length === 0) currentTierAnchors = [{ id: 'root', tier: 0, country, label: companyName }];
-    
-    // Starting tier will be the max of anchors + 1
-    let startingTier = Math.max(...currentTierAnchors.map(n => n.tier)) + 1;
+
+    // Starting tier will be used to track expansion depth.
+    // We start from the highest tier currently in the graph.
+    let startingTier = Math.max(...currentTierAnchors.map(n => n.tier), 0) + 1;
 
     for (let currentTier = startingTier; currentTier <= 6; currentTier++) {
         const nextTierAnchors = [];
-        
+
         // Parallel process anchors to speed up waterfall
         const anchorPromises = currentTierAnchors.slice(0, 7).map(async (anchor) => {
             const anchorCountry = anchor.country || country;
@@ -337,7 +346,8 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                 if (visitedSet.has(supplierKey)) continue;
                 visitedSet.add(supplierKey);
 
-                const nodeId = `t${currentTier}_${toNodeId(supplier.name)}`;
+                const nextTier = (anchor.tier || 0) + 1;
+                const nodeId = `t${nextTier}_${toNodeId(supplier.name)}`;
                 if ((existingGraph?.nodes || []).some(n => n.id === nodeId) || allNodes.some(n => n.id === nodeId)) continue;
 
                 const nodeCountry = supplier.country || anchor.country || 'XX';
@@ -347,21 +357,21 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                     id: nodeId,
                     label: supplier.name,
                     productName: supplier.relation ? `${supplier.relation} of ${anchor.label}` : `${hsn0 || 'Component'} Supplier`,
-                    sector: currentTier >= 5 ? 'Raw Materials' : 'Manufacturing',
-                    tier: currentTier,
+                    sector: nextTier >= 5 ? 'Raw Materials' : 'Manufacturing',
+                    tier: nextTier,
                     country: nodeCountry,
                     country_risk_score: null,
                     gpr_score: null,
                     sanctions_flag: ['CN', 'RU', 'IR', 'KP'].includes(nodeCountry),
                     data_source: supplier.source.includes('wikidata') ? 'Wikidata' :
-                                 supplier.source.includes('zauba') ? 'Zauba Customs' : 'UN Comtrade',
+                        supplier.source.includes('zauba') ? 'Zauba Customs' : 'UN Comtrade',
                     data_source_detail: supplier.confidence === 'VERIFIED' ? 'Customs verified shipment' : 'Inferred corporate relationship',
                     lat: coords.lat,
                     lng: coords.lng,
                     hsn: hsn0,
                     confidence: supplier.confidence || 'INFERRED',
                 };
-                
+
                 const newEdge = {
                     id: `e_${nodeId}_${anchor.id}`,
                     source: nodeId,
@@ -376,7 +386,7 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                 nextTierAnchors.push(newNode);
             }
         }
-        
+
         currentTierAnchors = nextTierAnchors;
         if (currentTierAnchors.length === 0) break;
     }
@@ -414,7 +424,7 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
         try {
             // We need a "parent" HS code to filter against. 
             // If the root company has multiple HS codes, we pick the most frequent one as the "anchor".
-            const parentAnchor = hsnCodes[0]; 
+            const parentAnchor = hsnCodes[0];
             const filterResult = await filterBOM(parentAnchor, hsnCodes);
             keptHsn = filterResult.kept;
             prunedHsn = filterResult.pruned;
@@ -428,7 +438,19 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
         fetchTier1FromImportYeti(companyName),
         fetchTier1FromZauba(companyName),
     ]);
-    const tier1Records = [...importYetiRecords, ...zaubaRecords];
+    let tier1Records = [...importYetiRecords, ...zaubaRecords];
+
+    // TIER 1 FALLBACK: If direct records fail (API block/credits), use trade-flow inference
+    if (tier1Records.length === 0 && keptHsn.length > 0) {
+        console.log(`[Graph] ⚠ Tier 1 empty (likely API block). Attempting Trade-Flow Fallback for "${companyName}"...`);
+        const fallbackRecs = await comtrade.getTopImportPartners(country, keptHsn[0], 5);
+        tier1Records = fallbackRecs.map(r => ({
+            ...r,
+            source_name: `${r.source_country} ${r.commodity || 'Component'} Mfrs`,
+            confidence: 'INFERRED',
+            data_source: 'Comtrade Fallback'
+        }));
+    }
     console.log(`[Graph] Tier 1 total: ${tier1Records.length} records.`);
 
     // Step 2: Tier 2 from Comtrade
