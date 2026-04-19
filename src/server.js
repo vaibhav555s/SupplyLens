@@ -1,4 +1,4 @@
-// ─── Supply Chain X-Ray API Server ───
+// ─── SupplyLens API Server ───
 // Express server exposing REST endpoints for Module 1 & 2.
 
 const express = require('express');
@@ -146,6 +146,7 @@ app.get('/api/entity/hsn-infer', async (req, res) => {
         const codes = await inferCompanyHSNCodes(company);
         res.json({ company, hsnCodes: codes });
     } catch (err) {
+        console.error("HSN INFER ERROR TRACE:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -154,6 +155,16 @@ app.get('/api/graph/build', async (req, res) => {
     try {
         const { company, country, hsnKeys } = req.query;
         if (!company) return res.status(400).json({ error: 'Missing company parameter' });
+
+        // V2 Cache Layer: Return instantly if we already built this graph globally
+        if (isDBConnected()) {
+            const CachedGraph = require('./db/models/CachedGraph');
+            const cached = await CachedGraph.findOne({ companyName: company.toLowerCase().trim() });
+            if (cached) {
+                console.log(`[Route/Graph] Loaded fully composed graph for "${company}" from DB Cache`);
+                return res.json(cached.graphData);
+            }
+        }
 
         let hsnCodes = hsnKeys ? hsnKeys.split(',').filter(Boolean) : [];
 
@@ -193,6 +204,17 @@ app.get('/api/graph/build', async (req, res) => {
             console.log(`[Route/Graph] Risk done. Avg: ${graphData.risk_summary.avg_risk} breakdown=${JSON.stringify(graphData.risk_summary.breakdown)}`);
         } catch (riskErr) {
             console.warn(`[Route/Graph] Risk enrichment failed: ${riskErr.message}`);
+        }
+
+        // Global Cache Save
+        if (isDBConnected()) {
+            const CachedGraph = require('./db/models/CachedGraph');
+            await CachedGraph.findOneAndUpdate(
+                { companyName: company.toLowerCase().trim() },
+                { graphData },
+                { upsert: true, returnDocument: 'after' }
+            );
+            console.log(`[Route/Graph] Saved computed graph to DB cache for "${company}"`);
         }
 
         res.json(graphData);
@@ -563,7 +585,7 @@ app.listen(config.port, async () => {
     await connectDB();
 
     console.log(`
-  ⬡ Supply Chain X-Ray API Server
+  ⬡ SupplyLens API Server
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Port:     ${config.port}
   Env:      ${config.nodeEnv}

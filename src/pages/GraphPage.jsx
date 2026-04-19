@@ -250,7 +250,15 @@ const GraphPage = () => {
 
         setIsBuildingGraph(true)
         const api = (await import('../services/api')).default;
-        const generatedGraph = await api.buildGraph(rootCompany, country, codes)
+
+        const startTime = Date.now();
+        const generatedGraph = await api.buildGraph(rootCompany, country, codes);
+
+        // Enforce a minimum 6.5 second delay so the TerminalLoader aesthetic animation plays out
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 6500) {
+          await new Promise(resolve => setTimeout(resolve, 6500 - elapsed));
+        }
 
         if (mounted) {
           // If nodes came back empty (fallback), ensure it has at least the root node
@@ -369,7 +377,7 @@ const GraphPage = () => {
           childrenEdges.forEach(e => {
             newEdges.push({
               ...e,
-              id: `e_reroute_${e.source}_${newNode.id}`,
+              id: `e_reroute_${e.source}_${newNode.id}_${Date.now()}`,
               target: newNode.id,
               confidence: 'VERIFIED',
               _isNewPivot: true // Marker for neon green styling

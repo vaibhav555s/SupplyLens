@@ -1,4 +1,4 @@
-// ─── Supply Chain X-Ray — Centralized Config ───
+// ─── SupplyLens — Centralized Config ───
 require('dotenv').config();
 
 module.exports = {
