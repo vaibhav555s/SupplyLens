@@ -27,6 +27,8 @@
     "ioredis": "^5.4.0",
     "jsonrepair": "^3.14.0",
     "jsonwebtoken": "^9.0.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.416.0",
     "mongoose": "^9.4.1",
