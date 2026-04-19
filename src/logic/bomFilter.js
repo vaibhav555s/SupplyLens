@@ -15,9 +15,7 @@ const llmChecker = require('./llmChecker');
 const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 const { normalizeToHS6 } = require('../utils/hsn');
 
-// HS chapters that are always irrelevant to manufacturing supply chains.
-// Paper(48), Office plastics(39 partial), Furniture(94), Misc(96), Arms(93)
-const ALWAYS_IRRELEVANT_CHAPTERS = new Set([48, 94, 96, 93, 82]);
+const { isStructuralInput } = require('../utils/hsTree');
 
 /**
  * Get the 4-digit heading prefix from a normalised HS6.
@@ -89,25 +87,22 @@ async function filterBOM(parentHs, candidateHscodes) {
         if (!cHs6) continue;
 
         const prefix4 = heading4(cHs6);
-        const parentPrefix4 = heading4(pHs6);
         const chapter = parseInt(prefix4.substring(0, 2), 10);
 
-        // 1. Same heading match — if it's the same category (e.g. motors to motors), keep it
-        if (prefix4 === parentPrefix4) {
-            kept.push(cHs6);
-            continue;
-        }
-
-        // 2. bomTree prefix match — instant deterministic decision
+        // 1. bomTree prefix match — instant deterministic decision
         const matchesTree = validInputPrefixes.some(v => v.replace('.', '').substring(0, 4) === prefix4);
         if (matchesTree) {
             kept.push(cHs6);
             continue;
         }
 
-        // 2. Always-irrelevant chapter — instant prune
-        if (ALWAYS_IRRELEVANT_CHAPTERS.has(chapter)) {
-            pruned.push({ hsn: cHs6, reason: 'Prefix mismatch — irrelevant HS chapter (office/furniture/paper)' });
+        // 2. hsTree heuristic — deterministic rules (e.g. valid sub-chapters vs. irrelevant chapters)
+        const structuralCheck = isStructuralInput(pHs6, cHs6);
+        if (structuralCheck === true) {
+            kept.push(cHs6);
+            continue;
+        } else if (structuralCheck === false) {
+            pruned.push({ hsn: cHs6, reason: 'Prefix mismatch — structurally irrelevant based on HS hierarchy heuristics' });
             continue;
         }
 

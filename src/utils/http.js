@@ -13,6 +13,9 @@ function sleep(ms) {
 // Per-source last-request timestamps for rate limiting
 const lastRequestTime = {};
 
+// Sources that have returned fatal errors (402, 403) and should be skipped for this session
+const deadSources = new Set();
+
 /**
  * Rate-limited, retrying HTTP GET.
  *
@@ -33,6 +36,10 @@ async function httpGet(url, options = {}) {
         maxRetries = config.retry.maxRetries,
         timeout = 30000,
     } = options;
+
+    if (deadSources.has(source)) {
+        throw new Error(`Source "${source}" is currently blacklisted due to previous fatal errors (402/403).`);
+    }
 
     // Rate limiting
     const rateLimit = config.rateLimits[source] || 0;
@@ -78,9 +85,11 @@ async function httpGet(url, options = {}) {
             }
 
             if (response.status === 401 || response.status === 403) {
+                console.warn(`[HTTP] Fatal auth/block (403) from ${source}. Blacklisting source for this session.`);
+                deadSources.add(source);
                 const e = new Error(`HTTP ${response.status}: ${url}`);
                 e.isAuthError = true;
-                throw e; // Caught by catch block, but we'll check isAuthError
+                throw e; 
             }
 
             if (response.status >= 400) {
@@ -114,6 +123,10 @@ async function httpPost(url, data, options = {}) {
         maxRetries = config.retry.maxRetries,
         timeout = 30000,
     } = options;
+
+    if (deadSources.has(source)) {
+        throw new Error(`Source "${source}" is currently blacklisted due to previous fatal errors (402/403).`);
+    }
 
     const rateLimit = config.rateLimits[source] || 0;
     if (rateLimit > 0) {
@@ -153,9 +166,11 @@ async function httpPost(url, data, options = {}) {
                 continue;
             }
 
-            if (response.status === 401 || response.status === 403) {
-                const e = new Error(`HTTP ${response.status}: ${url}`);
-                e.isAuthError = true;
+            if (response.status === 402) {
+                console.warn(`[HTTP] Error 402 (Payment Required) for ${source}. Credits exhausted. Blacklisting source for this session.`);
+                deadSources.add(source);
+                const e = new Error(`Payment Required (402) for ${source}`);
+                e.isAuthError = true; // Use existing flag to prevent retry
                 throw e;
             }
 

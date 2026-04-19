@@ -39,6 +39,7 @@ async function geocode(query) {
                 'User-Agent': 'SupplyChainXRay/1.0 (academic-research; contact@supplychainxray.com)',
             },
             timeout: 20000,
+            maxRetries: 0,
         });
 
         if (!Array.isArray(data) || data.length === 0) {
