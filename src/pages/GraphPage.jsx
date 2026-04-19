@@ -300,9 +300,17 @@ const GraphPage = () => {
     return () => { mounted = false }
   }, [realEntity, companyName, hsnCodes])
 
-  const [view, setView] = useState('graph')
-  const [visibleTiers, setVisibleTiers] = useState([0, 1, 2, 3, 4, 5, 6])
+  const [view, setView] = useState(location.state?.view || 'graph')
+  const [visibleTiers, setVisibleTiers] = useState([0])
   const [selectedNode, setSelectedNode] = useState(null)
+
+  // Sync view when navbar changes location.state (e.g. clicking "Map" nav item)
+  // without triggering a full page re-mount (same /graph pathname key)
+  useEffect(() => {
+    if (location.state?.view && !isBuildingGraph) {
+      setView(location.state.view)
+    }
+  }, [location.state?.view])
   const [disruptions, setDisruptions] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [showToast, setShowToast] = useState(false)
@@ -466,7 +474,7 @@ const GraphPage = () => {
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
-        paddingTop: '72px',
+        paddingTop: '90px',
       }}>
         <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
@@ -927,50 +935,67 @@ const GraphPage = () => {
       </div>
 
       {/* CENTER PANEL */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-        {/* View toggle */}
-        <div style={{
-          position: 'absolute',
-          top: '76px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 10,
-          background: 'rgba(13,13,20,0.85)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(139,92,246,0.15)',
-          borderRadius: '999px',
-          padding: '4px',
-          display: 'flex',
-          gap: '4px',
-        }}>
-          {[
-            { id: 'graph', label: '◈ Graph View' },
-            { id: 'map', label: '🌍 Map View' },
-          ].map(v => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              style={{
-                background: view === v.id ? 'rgba(124,58,237,0.25)' : 'transparent',
-                border: view === v.id ? '1px solid rgba(139,92,246,0.4)' : '1px solid transparent',
-                borderRadius: '999px',
-                color: view === v.id ? '#f8fafc' : '#64748b',
-                cursor: 'pointer',
-                padding: '7px 18px',
-                fontSize: '13px',
-                fontWeight: view === v.id ? 600 : 400,
-                fontFamily: 'Inter, sans-serif',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+      <div style={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        position: 'relative', 
+        overflow: 'hidden',
+        paddingTop: '90px', // Ensure content starts below the floating navbar
+      }}>
+        {/* View toggle — Moved to bottom to avoid overlapping with navbar */}
+        {!isBuildingGraph && (
+          <div style={{
+            position: 'absolute',
+            bottom: '32px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 2000,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              background: 'rgba(13,13,20,0.9)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(139,92,246,0.2)',
+              borderRadius: '999px',
+              padding: '5px',
+              display: 'flex',
+              gap: '4px',
+              pointerEvents: 'all',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 16px rgba(139,92,246,0.1)',
+            }}>
+              {[
+                { id: 'graph', label: '◈ Graph View' },
+                { id: 'map', label: '🌍 Map View' },
+              ].map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setView(v.id)}
+                  style={{
+                    background: view === v.id ? 'rgba(124,58,237,0.3)' : 'transparent',
+                    border: view === v.id ? '1px solid rgba(139,92,246,0.4)' : '1px solid transparent',
+                    borderRadius: '999px',
+                    color: view === v.id ? '#f8fafc' : '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '8px 20px',
+                    fontSize: '13px',
+                    fontWeight: view === v.id ? 600 : 400,
+                    fontFamily: 'Inter, sans-serif',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Graph/Map area */}
-        <div style={{ flex: 1, width: '100%', height: '100%' }}>
+        <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
           <AnimatePresence mode="wait">
             {isBuildingGraph ? (
               <motion.div
@@ -1008,7 +1033,7 @@ const GraphPage = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '100%', position: 'relative' }}
               >
                 <GeoMap
                   graphData={graphData}
@@ -1029,7 +1054,7 @@ const GraphPage = () => {
         flexShrink: 0,
         background: '#0d0d14',
         borderLeft: '1px solid rgba(139,92,246,0.1)',
-        paddingTop: '64px',
+        paddingTop: '90px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
