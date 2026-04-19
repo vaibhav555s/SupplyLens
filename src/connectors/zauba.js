@@ -51,22 +51,6 @@ async function searchCompany(companyName, tradeType = 'import') {
         }
     } catch (err) {
         console.error(`[Zauba] Error fetching "${companyName}": ${err.message}`);
-        if (companyName.toLowerCase().includes('tesla')) {
-            console.log(`[Zauba] Fallback: Injecting generic Indian customs data for ${companyName}`);
-            return [{
-                source_name: "Tata AutoComp Systems",
-                source_country: "IN",
-                target_name: companyName,
-                target_country: "US",
-                hs_code: "870829",
-                hs_code_6: "870829",
-                commodity: "Auto Parts - Stampings",
-                trade_type: "import",
-                shipment_count: 51,
-                data_source: "zauba",
-                confidence: "VERIFIED"
-            }];
-        }
         return [];
     }
 }

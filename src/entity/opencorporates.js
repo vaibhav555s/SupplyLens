@@ -46,7 +46,7 @@ async function searchCompany(companyName, countryIso) {
         const data = await httpGet(`${BASE_URL}/companies/search`, {
             source: 'opencorporates',
             params,
-            timeout: 15000,
+            timeout: 5000,
         });
 
         const entity = parseOpenCorpResponse(data, companyName, countryIso);

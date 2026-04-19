@@ -26,36 +26,7 @@ const { cacheGet, cacheSet, cacheKey } = require('../utils/redis');
 // GPR Index — Geopolitical Risk Scores (Caldara & Iacoviello, 2024 avg)
 // Normalized to 0-100. Source: https://www.matteoiacoviello.com/gpr.htm
 // ─────────────────────────────────────────────────────────────────────────────
-const GPR_SCORES = {
-    // Very High GPR (conflict zones / active geopolitical tension)
-    RU: 94, UA: 96, IR: 91, KP: 88, SY: 95, YE: 97, AF: 98, SD: 89, LY: 88, MM: 85,
-    // High GPR
-    CN: 68, PK: 72, IQ: 82, EG: 65, NG: 74, VE: 70, BY: 76, CU: 62, SS: 90, SO: 91,
-    // Elevated GPR
-    IN: 54, TH: 48, PH: 52, VN: 42, ID: 40, MX: 58, TR: 61, BR: 44, ZA: 55, KZ: 50,
-    // Low GPR (stable)
-    US: 35, DE: 22, JP: 28, KR: 38, TW: 45, GB: 25, FR: 24, IT: 20, CA: 18, AU: 15,
-    NL: 15, SG: 16, HK: 32, SE: 12, NO: 11, CH: 13, MX: 58, MY: 38, TH: 48, PL: 26,
-    HU: 30, CZ: 22, AT: 14, BE: 18, ES: 20, PT: 14, FI: 14, DK: 13, NZ: 12,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Hardcoded Fallback Risk Scores
-// Used when World Bank API is unavailable or country not listed.
-// Scale: 0-100, higher = riskier.
-// ─────────────────────────────────────────────────────────────────────────────
-const FALLBACK_RISK = {
-    // Sanctioned / conflict zones
-    RU: 88, IR: 91, KP: 95, BY: 82, SY: 93, YE: 95, AF: 96, SD: 87, MM: 80, CU: 72, VE: 68,
-    // High-risk emerging markets
-    NG: 70, PK: 68, ZW: 74, LY: 82, SS: 88, SO: 92, IQ: 78, VN: 44, PH: 48, ID: 40,
-    // Moderate risk
-    CN: 62, IN: 45, MX: 50, TH: 42, MY: 38, TR: 55, BR: 42, ZA: 52, EG: 58, UA: 78,
-    // Low risk — developed economies
-    US: 18, DE: 14, JP: 20, KR: 28, TW: 38, GB: 16, FR: 18, IT: 22, CA: 12, AU: 10,
-    NL: 14, SG: 12, HK: 30, SE: 10, NO: 10, CH: 10, AT: 14, BE: 16, ES: 20, PL: 24,
-    HU: 28, CZ: 20, FI: 10, DK: 10,
-};
+// Hardcoded Fallback TABLES REMOVED for 100% Transparency.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // World Bank Indicator IDs (WGI — Worldwide Governance Indicators)
@@ -177,9 +148,6 @@ async function getCountryRisk(isoCode) {
     const cached = await cacheGet(cKey);
     if (cached) return cached;
 
-    // --- GPR Score (embedded table — instant) ---
-    const gprRaw = GPR_SCORES[iso] ?? 50;
-
     // --- World Bank WGI Score (live API) ---
     let wbResult = null;
     try {
@@ -189,22 +157,27 @@ async function getCountryRisk(isoCode) {
     }
 
     // --- Compose Final Score ---
-    let country_risk_score;
-    let data_source;
+    let country_risk_score = null;
+    let gprRaw = null;
+    let data_source = 'NONE';
 
     if (wbResult) {
-        // 60% World Bank (governance) + 40% GPR (geopolitical events)
-        country_risk_score = Math.round(0.60 * wbResult.wb_risk + 0.40 * gprRaw);
-        data_source = 'WorldBank+GPR';
+        // GPR is now null-safe (no fallback)
+        // If WB exists, use it as primary score.
+        country_risk_score = wbResult.wb_risk;
+        data_source = 'WorldBank (Extracted)';
     } else {
-        // No live WB data — use fallback table + GPR
-        const fallbackRisk = FALLBACK_RISK[iso] ?? 50;
-        country_risk_score = Math.round(0.55 * fallbackRisk + 0.45 * gprRaw);
-        data_source = FALLBACK_RISK[iso] !== undefined ? 'GPR+Fallback' : 'Fallback';
+        // No live WB data — return null for transparency
+        console.warn(`[Risk v2] No extracted risk data available for ${iso}`);
+        return {
+            country_risk_score: null,
+            gpr_score: null,
+            wb_risk: null,
+            wb_indicators: null,
+            risk_label: 'UNKNOWN',
+            data_source: 'N/A (No Extraction)',
+        };
     }
-
-    // Clamp to 0-100
-    country_risk_score = Math.max(0, Math.min(100, country_risk_score));
 
     // --- Risk Label ---
     let risk_label;

@@ -83,11 +83,7 @@ Return ONLY a JSON object with a single key "hsnCodes" containing an array of ob
 IMPORTANT: DO NOT just copy generic examples. The HSN codes MUST accurately reflect "${companyName}"'s primary industry.
 Each object must have exactly these keys:
 "code" (string, the realistic 6-digit HSN code),
-"description" (string, short product description),
-"records" (number, plausible shipment volume 100-3000),
-"countries" (array of exactly 3 country ISO codes like ["JP","TW","CN"]),
-"flags" (array of 3 flag emojis matching the countries),
-"icon" (a single relevant emoji for the product).`,
+"description" (string, short product description).`,
                     },
                 ],
             }, {
@@ -136,22 +132,13 @@ async function inferCompanyHSNCodes(companyName) {
         return cached;
     }
 
-    // Step 1 & 2 — registry lookup (free, instant)
+    /* 
+    // Step 1 & 2 — registry lookup (DISABLED — Per user request for 100% extraction)
     const registryResult = registryLookup(companyName);
     if (registryResult) {
-        // Convert plain code strings to the expected object format for backwards compat
-        const result = registryResult.codes.map(code => ({
-            code,
-            description: '',
-            records: 0,
-            countries: [],
-            flags: [],
-            icon: '📦',
-            source: registryResult.source,
-        }));
-        await cacheSet(cKey, result, 86400);
-        return result;
+        ...
     }
+    */
 
     // Step 3 — LLM fallback
     console.log(`[HSN v2] Registry miss for "${companyName}" — calling LLM...`);

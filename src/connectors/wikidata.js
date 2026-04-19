@@ -149,12 +149,12 @@ async function getCompaniesByIndustryAndCountry(countryIso, hsCode, limit = 5) {
 function buildSparqlQuery(industryQid, countryQid, limit) {
     return `
 SELECT DISTINCT ?company ?companyLabel ?countryLabel WHERE {
-  ?company wdt:P31 wd:Q4830453 .          # instance of: business enterprise
+  ?company wdt:P31/wdt:P279* wd:Q4830453 . # instance of: business or company (transitive)
   ?company wdt:P452 wd:${industryQid} .   # industry
   ?company wdt:P17 wd:${countryQid} .     # country
-  ?company wdt:P856 ?website .            # has a website (active company filter)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
+ORDER BY DESC(?company)
 LIMIT ${limit}
 `.trim();
 }
@@ -188,4 +188,155 @@ const ISO_TO_WIKIDATA_QID = {
     ES: 'Q29', FI: 'Q33', DK: 'Q35', NO: 'Q20',
 };
 
-module.exports = { getCompaniesByIndustryAndCountry, getIndustryForHS, HS_TO_INDUSTRY_QID };
+/**
+ * Query Wikidata for corporate hierarchy (subsidiaries or parent companies).
+ *
+ * @param {string} companyName - Company to find relatives for
+ * @returns {Promise<Array<{name: string, country: string, source: string, confidence: string, relation: string}>>}
+ */
+async function getCorporateHierarchy(companyName) {
+    if (!companyName || companyName.length < 3) return [];
+
+    const cKey = cacheKey('wikidata_hierarchy', companyName);
+    const cached = await cacheGet(cKey);
+    if (cached) return cached;
+
+    console.log(`[Wikidata] Searching hierarchy for "${companyName}"...`);
+
+    const sparql = `
+SELECT ?relative ?relativeLabel ?countryCode ?relation WHERE {
+  SERVICE wikibase:mwapi {
+      bd:serviceParam wikibase:api "EntitySearch" .
+      bd:serviceParam wikibase:endpoint "www.wikidata.org" .
+      bd:serviceParam mwapi:search "${companyName}" .
+      bd:serviceParam mwapi:language "en" .
+      ?company wikibase:apiOutputItem mwapi:item .
+  }
+  
+  {
+    ?company wdt:P355 ?relative . # subsidiary
+    BIND("subsidiary" AS ?relation)
+  } UNION {
+    ?relative wdt:P355 ?company . # parent
+    BIND("parent" AS ?relation)
+  } UNION {
+    ?company wdt:P127 ?relative . # owned by
+    BIND("parent" AS ?relation)
+  } UNION {
+    ?relative wdt:P127 ?company . # owns
+    BIND("subsidiary" AS ?relation)
+  }
+
+  OPTIONAL { 
+    ?relative wdt:P17 ?countryObj .
+    ?countryObj wdt:P298 ?countryCode . # ISO-3166-1 alpha-3
+  }
+  
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+LIMIT 5
+`.trim();
+
+    try {
+        const data = await httpGet(WIKIDATA_SPARQL, {
+            source: 'wikidata',
+            params: { query: sparql, format: 'json' },
+            headers: {
+                'User-Agent': 'SupplyChainXRay/2.0 (supply-chain-research; contact@syn3rgy.ai)',
+                'Accept': 'application/sparql-results+json',
+            },
+            timeout: 15000,
+        });
+
+        const results = [];
+        if (data?.results?.bindings) {
+            data.results.bindings.forEach(b => {
+                if (b.relativeLabel?.value) {
+                    results.push({
+                        name: b.relativeLabel.value,
+                        country: b.countryCode?.value?.substring(0, 2) || 'XX',
+                        source: 'wikidata-hierarchy',
+                        confidence: 'INFERRED',
+                        relation: b.relation?.value || 'related'
+                    });
+                }
+            });
+        }
+
+        if (results.length > 0) {
+            await cacheSet(cKey, results, 86400 * 7);
+        }
+        return results;
+    } catch (err) {
+        console.warn(`[Wikidata] Hierarchy query failed for ${companyName}: ${err.message}`);
+        return [];
+    }
+}
+
+/**
+ * Simple search for a company by name on Wikidata.
+ */
+async function searchCompany(companyName, countryIso) {
+    if (!companyName) return null;
+
+    const query = `
+SELECT ?company ?companyLabel ?countryLabel ?website ?description WHERE {
+  SERVICE wikibase:mwapi {
+      bd:serviceParam wikibase:api "EntitySearch" .
+      bd:serviceParam wikibase:endpoint "www.wikidata.org" .
+      bd:serviceParam mwapi:search "${companyName}" .
+      bd:serviceParam mwapi:language "en" .
+      ?company wikibase:apiOutputItem mwapi:item .
+  }
+  ?company wdt:P31/wdt:P279* wd:Q4830453 . # instance of business
+  OPTIONAL { ?company wdt:P17 ?country . ?country wdt:P297 ?countryCode . }
+  OPTIONAL { ?company wdt:P856 ?website . }
+  OPTIONAL { 
+    ?company schema:description ?description .
+    FILTER(LANG(?description) = "en")
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+LIMIT 1
+`;
+
+    try {
+        const data = await httpGet(WIKIDATA_SPARQL, {
+            source: 'wikidata',
+            params: { query, format: 'json' },
+            headers: { 'Accept': 'application/sparql-results+json' },
+            timeout: 10000
+        });
+
+        if (data?.results?.bindings?.length > 0) {
+            const b = data.results.bindings[0];
+            return {
+                name: b.companyLabel?.value || companyName,
+                country: b.countryCode?.value || countryIso || 'XX',
+                source: 'wikidata',
+                website: b.website?.value || '',
+                description: b.description?.value || '',
+                confidence: 'VERIFIED'
+            };
+        }
+    } catch (err) {
+        console.warn(`[Wikidata] Search failed for ${companyName}: ${err.message}`);
+    }
+    return null;
+}
+
+/**
+ * Fuzzy search fallback.
+ */
+async function searchCompanyFuzzy(companyName, countryIso) {
+    return searchCompany(companyName, countryIso); // Standard search is already fuzzy via MWAPI
+}
+
+module.exports = { 
+    getCompaniesByIndustryAndCountry, 
+    getIndustryForHS, 
+    getCorporateHierarchy,
+    searchCompany,
+    searchCompanyFuzzy,
+    HS_TO_INDUSTRY_QID 
+};

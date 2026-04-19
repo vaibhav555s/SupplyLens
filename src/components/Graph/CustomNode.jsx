@@ -316,7 +316,7 @@ const CustomNode = memo(({ data, selected }) => {
           </span>
           {data.shipments > 0 && (
             <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace' }}>
-              ◈ {data.shipments.toLocaleString()}
+              ◈ {(data.shipments || 0).toLocaleString()}
             </span>
           )}
           {data.bypassed ? (

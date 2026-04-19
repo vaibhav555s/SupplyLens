@@ -369,7 +369,7 @@ const GraphPage = () => {
                 childrenEdges.forEach(e => {
                     newEdges.push({
                         ...e,
-                        id: `e_reroute_${e.source}_${newNode.id}`,
+                        id: `e_reroute_${e.source}_${newNode.id}_${Date.now()}`,
                         target: newNode.id,
                         confidence: 'VERIFIED',
                         _isNewPivot: true // Marker for neon green styling

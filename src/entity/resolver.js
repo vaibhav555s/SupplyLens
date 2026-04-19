@@ -45,42 +45,44 @@ async function resolveEntity(companyName, countryIso, options = {}) {
     let entity = null;
     let resolutionPath = [];
 
-    // ─── Step 1: OpenCorporates ───
+    // ─── Step 1: Parallel Search (OpenCorporates & Wikidata) ───
     try {
-        entity = await opencorporates.searchCompany(companyName, countryIso);
-        if (entity) {
+        const [ocPromise, wikiPromise] = [
+            opencorporates.searchCompany(companyName, countryIso).catch(err => {
+                console.warn(`[Resolver] OpenCorporates failed: ${err.message}`);
+                return null;
+            }),
+            wikidata.searchCompany(companyName, countryIso).catch(err => {
+                console.warn(`[Resolver] Wikidata failed: ${err.message}`);
+                return null;
+            })
+        ];
+
+        const [ocEntity, wikiEntity] = await Promise.all([ocPromise, wikiPromise]);
+
+        if (ocEntity) {
+            entity = ocEntity;
             resolutionPath.push('opencorporates');
-            console.log(`[Resolver] ✓ OpenCorporates: "${entity.name}" (${entity.country})`);
         }
-    } catch (err) {
-        console.warn(`[Resolver] OpenCorporates failed: ${err.message}`);
-    }
 
-    // ─── Step 2: Wikidata (if OpenCorp missed, or to enrich) ───
-    try {
-        const wikiEntity = await wikidata.searchCompany(companyName, countryIso);
         if (wikiEntity) {
-            resolutionPath.push('wikidata');
-
             if (!entity) {
                 entity = wikiEntity;
-                console.log(`[Resolver] ✓ Wikidata: "${entity.name}" (${entity.country})`);
+                resolutionPath.push('wikidata');
             } else {
-                // Enrich existing entity with Wikidata extras
                 entity = enrichEntity(entity, wikiEntity);
-                console.log(`[Resolver] ✓ Wikidata enriched: parent="${wikiEntity.extra?.parent_company || 'N/A'}"`);
+                resolutionPath.push('wikidata_enrich');
             }
         }
     } catch (err) {
-        console.warn(`[Resolver] Wikidata failed: ${err.message}`);
+        console.error(`[Resolver] Parallel search error: ${err.message}`);
     }
 
-    // ─── Step 2b: Wikidata fuzzy search fallback ───
+    // ─── Step 1b: Fallback to Wikidata Fuzzy if still no entity ───
     if (!entity) {
         try {
-            const fuzzyEntity = await wikidata.searchCompanyFuzzy(companyName, countryIso);
-            if (fuzzyEntity) {
-                entity = fuzzyEntity;
+            entity = await wikidata.searchCompanyFuzzy(companyName, countryIso);
+            if (entity) {
                 resolutionPath.push('wikidata_fuzzy');
                 console.log(`[Resolver] ✓ Wikidata fuzzy: "${entity.name}" (${entity.country})`);
             }
@@ -186,7 +188,7 @@ function enrichEntity(base, additional) {
 async function batchResolve(companies) {
     const results = {};
 
-    for (const { name, country } of companies) {
+    const resolvePromises = companies.map(async ({ name, country }) => {
         try {
             const entity = await resolveEntity(name, country);
             if (entity) {
@@ -195,8 +197,9 @@ async function batchResolve(companies) {
         } catch (err) {
             console.warn(`[Resolver] Batch: failed on "${name}": ${err.message}`);
         }
-    }
+    });
 
+    await Promise.all(resolvePromises);
     return results;
 }
 

@@ -89,9 +89,16 @@ async function filterBOM(parentHs, candidateHscodes) {
         if (!cHs6) continue;
 
         const prefix4 = heading4(cHs6);
+        const parentPrefix4 = heading4(pHs6);
         const chapter = parseInt(prefix4.substring(0, 2), 10);
 
-        // 1. bomTree prefix match — instant deterministic decision
+        // 1. Same heading match — if it's the same category (e.g. motors to motors), keep it
+        if (prefix4 === parentPrefix4) {
+            kept.push(cHs6);
+            continue;
+        }
+
+        // 2. bomTree prefix match — instant deterministic decision
         const matchesTree = validInputPrefixes.some(v => v.replace('.', '').substring(0, 4) === prefix4);
         if (matchesTree) {
             kept.push(cHs6);

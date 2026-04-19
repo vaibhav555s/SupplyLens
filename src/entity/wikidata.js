@@ -39,7 +39,7 @@ async function searchCompany(companyName, countryIso) {
             headers: {
                 'Accept': 'application/sparql-results+json',
             },
-            timeout: 20000,
+            timeout: 6000,
         });
 
         const entity = parseSparqlResponse(data, companyName, countryIso);
@@ -203,7 +203,7 @@ async function searchCompanyFuzzy(companyName, countryIso) {
             source: 'wikidata',
             params: { query: sparql, format: 'json' },
             headers: { 'Accept': 'application/sparql-results+json' },
-            timeout: 20000,
+            timeout: 6000,
         });
 
         return parseSparqlResponse(data, companyName, countryIso);

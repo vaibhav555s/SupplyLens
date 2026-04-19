@@ -33,14 +33,14 @@ async function generateAlternativeSupplier(nodeId, hsn, tier, parentId) {
       "country_risk_score": 38,
       "gpr_score": 25,
       "sanctions_flag": false,
-      "data_source": "AI Recon Engine",
-      "data_source_detail": "High-confidence safe jurisdiction pivot",
+      "data_source": "AI Recon Engine (HYPOTHETICAL)",
+      "data_source_detail": "Last-resort synthetic supplier suggestion",
       "lat": 14.05, 
       "lng": 108.27 
     }
   ],
   "edges": [
-    { "id": "e_pivot_1", "source": "new_safe_supplier_1", "target": "root", "type": "supplies", "hsn": "8507.60", "confidence": "HIGH" }
+    { "id": "e_pivot_1", "source": "new_safe_supplier_1", "target": "root", "type": "supplies", "hsn": "8507.60", "confidence": "SYNTHETIC" }
   ]
 }`;
 
@@ -50,6 +50,7 @@ The new supplier MUST connect to the parent node with ID: "${parentId}".
 The new supplier MUST sit at Tier level: ${tier}.
 CRITICAL: The new supplier MUST be located in a safe, non-sanctioned, friendly jurisdiction (e.g. VN, TH, MX, IN, MY).
 DO NOT use CN, RU, IR, or KP for the country. Provide realistic coordinates for the country chosen.
+The data_source MUST be "AI Recon Engine (HYPOTHETICAL)" and confidence MUST be "SYNTHETIC".
 
 Return ONLY a strictly valid JSON object matching this schema: ${schema}. Do not include any HTML, markdown, or explanations.`;
 

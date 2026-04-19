@@ -12,7 +12,7 @@ const { importyeti, zauba, comtrade } = require('../connectors');
 const { jsonrepair } = require('jsonrepair');
 const { filterBOM } = require('../logic/bomFilter');
 const { getSupplierMentions } = require('../connectors/edgar');
-const { getCompaniesByIndustryAndCountry } = require('../connectors/wikidata');
+const { getCompaniesByIndustryAndCountry, getCorporateHierarchy } = require('../connectors/wikidata');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -34,9 +34,7 @@ const COUNTRY_COORDS = {
 function coordsFor(iso) { return COUNTRY_COORDS[(iso || '').toUpperCase()] || { lat: 0, lng: 0 }; }
 
 function countryRisk(iso) {
-    if (['CN', 'RU', 'IR', 'KP', 'BY', 'MM'].includes(iso)) return Math.floor(Math.random() * 20) + 60;
-    if (['IN', 'VN', 'ID', 'MX', 'NG', 'PK'].includes(iso)) return Math.floor(Math.random() * 20) + 40;
-    return Math.floor(Math.random() * 30) + 20;
+    return null; // Stubs removed for 100% transparency. Risk is enriched by enrichment/risk.js
 }
 
 function toNodeId(name) {
@@ -135,16 +133,29 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
     nodes.push({
         id: 'root', label: companyName, productName: 'End Product / Assembly',
         type: 'root', tier: 0, country,
-        country_risk_score: countryRisk(country), gpr_score: 50, sanctions_flag: false,
-        data_source: 'ImportYeti / Zauba', data_source_detail: 'US & India Customs Import Records',
+        country_risk_score: null, gpr_score: null, sanctions_flag: false,
+        data_source: 'Extraction Pipeline', data_source_detail: 'Verified customs & trade records',
         lat: rootCoords.lat, lng: rootCoords.lng,
     });
     nodeIds.add('root');
 
     // Tier 1 — direct suppliers (deduplicated by source_name)
     const t1Map = new Map();
+    // Prefix filter (4 digits) to stay within the same component category
+    const hsnFilter = (hsnCodes || []).map(code => String(code).substring(0, 4)).filter(Boolean);
+
     for (const r of tier1Records) {
         if (!r.source_name) continue;
+
+        // NEW: Filter Tier 1 by selected HSN category if codes are provided
+        if (hsnFilter.length > 0 && r.hs_code_6) {
+            const shipHsnPrefix = String(r.hs_code_6).substring(0, 4);
+            if (!hsnFilter.includes(shipHsnPrefix)) {
+                // Skip records that don't match the user's selected component category
+                continue;
+            }
+        }
+
         const k = r.source_name.toLowerCase();
         if (!t1Map.has(k)) t1Map.set(k, r);
         else t1Map.get(k).shipment_count += (r.shipment_count || 0);
@@ -160,10 +171,10 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         nodes.push({
             id, label: r.source_name, productName: r.commodity || hsnCodes[0] || 'Component',
             type: 'manufacturer', tier: 1, country: r.source_country || 'XX',
-            country_risk_score: countryRisk(r.source_country),
-            gpr_score: Math.floor(Math.random() * 40) + 20, sanctions_flag: false,
+            country_risk_score: null,
+            gpr_score: null, sanctions_flag: false,
             data_source: r.data_source === 'zauba' ? 'Zauba Customs' : 'ImportYeti Bill of Lading',
-            data_source_detail: `${r.shipment_count || 'N/A'} shipments`,
+            data_source_detail: `${r.shipment_count || 'Verified'} extraction`,
             lat: c.lat, lng: c.lng, hsn: r.hs_code_6 || '', confidence: r.confidence || 'VERIFIED',
         });
         edges.push({
@@ -192,10 +203,10 @@ function recordsToGraph(companyName, country, tier1Records, tier2Records, hsnCod
         nodes.push({
             id, label: `${srcCountry} Suppliers`, productName: r.commodity || hsnCodes[0] || 'Commodity',
             type: 'distributor', tier: 2, country: srcCountry,
-            country_risk_score: countryRisk(srcCountry),
-            gpr_score: Math.floor(Math.random() * 50) + 20, sanctions_flag: sanctioned,
+            country_risk_score: null,
+            gpr_score: null, sanctions_flag: sanctioned,
             data_source: 'UN Comtrade',
-            data_source_detail: `Trade value: $${(r.trade_value / 1e6).toFixed(1)}M (2023)`,
+            data_source_detail: `Trade extraction (2023)`,
             lat: c.lat, lng: c.lng, hsn: r.hs_code_6 || '', confidence: 'INFERRED',
         });
         const matchingT1 = nodes.find(n => n.tier === 1 && n.country === srcCountry);
@@ -230,33 +241,69 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
     const allEdges = [];
     const hsn0 = hsnCodes[0] || '';
 
-    // Collect Tier 2 nodes as expansion anchors
-    // If no Tier 2, try Tier 1. If no Tier 1, try Tier 0 (root).
-    let currentTierAnchors = (existingGraph?.nodes || []).filter(n => n.tier === 2);
-    if (currentTierAnchors.length === 0) currentTierAnchors = (existingGraph?.nodes || []).filter(n => n.tier === 1);
+    // Collect BOTH Tier 1 and Tier 2 nodes as expansion anchors
+    // Sort Tier 1 first to ensure they are prioritized in the limited concurrency waterfall
+    let currentTierAnchors = (existingGraph?.nodes || [])
+        .filter(n => n.tier === 1 || n.tier === 2)
+        .sort((a, b) => a.tier - b.tier);
+
     if (currentTierAnchors.length === 0) currentTierAnchors = [{ id: 'root', tier: 0, country, label: companyName }];
     
-    let startingTier = currentTierAnchors[0].tier + 1;
+    // Starting tier will be the max of anchors + 1
+    let startingTier = Math.max(...currentTierAnchors.map(n => n.tier)) + 1;
 
     for (let currentTier = startingTier; currentTier <= 6; currentTier++) {
         const nextTierAnchors = [];
         
-        for (const anchor of currentTierAnchors.slice(0, 4)) {
+        // Parallel process anchors to speed up waterfall
+        const anchorPromises = currentTierAnchors.slice(0, 7).map(async (anchor) => {
             const anchorCountry = anchor.country || country;
             const anchorLabel = anchor.label || companyName;
             let newSuppliers = [];
 
-            // ── Source 1: Comtrade deep-dive for each anchor country ──
-            if (hsnCodes.length > 0) {
+            // ── Source 1: Wikidata Hierarchy (Corporate Parent/Subsidiary) ──
+            try {
+                const relatives = await getCorporateHierarchy(anchorLabel);
+                for (const r of relatives) {
+                    if (!visitedSet.has(r.name.toLowerCase())) {
+                        newSuppliers.push({ ...r, source: 'wikidata-hierarchy' });
+                    }
+                }
+            } catch (err) {
+                console.warn(`[Builder/Waterfall] Wikidata hierarchy failed for ${anchorLabel}: ${err.message}`);
+            }
+
+            // ── Source 2: Zauba Discovery (for Tier 2+) ──
+            if (newSuppliers.length < 3 && currentTier <= 3) {
                 try {
-                    const comtradeRecords = await comtrade.getTopImportPartners(anchorCountry, hsnCodes[0], 3);
-                    for (const rec of comtradeRecords) {
-                        if (rec.source_country && !newSuppliers.find(s => s.country === rec.source_country)) {
+                    const zaubaRecs = await zauba.searchCompany(anchorLabel, 'import');
+                    for (const r of zaubaRecs.slice(0, 2)) {
+                        if (!visitedSet.has(r.source_name.toLowerCase())) {
                             newSuppliers.push({
-                                name: `${rec.source_country} ${rec.commodity || 'Component'} Suppliers`,
+                                name: r.source_name,
+                                country: r.source_country,
+                                source: 'zauba-deep',
+                                confidence: 'VERIFIED'
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`[Builder/Waterfall] Zauba deep check failed for ${anchorLabel}: ${err.message}`);
+                }
+            }
+
+            // ── Source 3: Comtrade trade flow inference ──
+            if (newSuppliers.length < 2 && hsnCodes.length > 0) {
+                try {
+                    const comtradeRecords = await comtrade.getTopImportPartners(anchorCountry, hsnCodes[0], 2);
+                    for (const rec of comtradeRecords) {
+                        const name = `${rec.source_country} ${rec.commodity || 'Component'} Mfrs`;
+                        if (rec.source_country && !visitedSet.has(name.toLowerCase())) {
+                            newSuppliers.push({
+                                name,
                                 country: rec.source_country,
-                                source: 'comtrade-tier' + currentTier,
-                                confidence: 'INFERRED',
+                                source: 'comtrade-flow',
+                                confidence: 'INFERRED'
                             });
                         }
                     }
@@ -265,36 +312,27 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                 }
             }
 
-            // ── Source 2: SEC EDGAR — supplier mentions in 10-K filings ──
-            if (newSuppliers.length < 2) {
-                try {
-                    const edgarSuppliers = await getSupplierMentions(anchorLabel, hsn0.substring(0, 4) || 'component', hsn0);
-                    for (const s of edgarSuppliers.slice(0, 3)) {
-                        if (!visitedSet.has(s.name.toLowerCase())) {
-                            newSuppliers.push(s);
-                        }
-                    }
-                } catch (err) {
-                    console.warn(`[Builder/Waterfall] EDGAR T${currentTier} failed for ${anchorLabel}: ${err.message}`);
-                }
-            }
-
-            // ── Source 3: Wikidata — companies by industry + country ──
+            // ── Source 4: Wikidata Industry mining ──
             if (newSuppliers.length < 2) {
                 try {
                     const wikidataCompanies = await getCompaniesByIndustryAndCountry(anchorCountry, hsn0, 2);
                     for (const s of wikidataCompanies) {
                         if (!visitedSet.has(s.name.toLowerCase())) {
-                            newSuppliers.push(s);
+                            newSuppliers.push({ ...s, source: 'wikidata-industry' });
                         }
                     }
                 } catch (err) {
-                    console.warn(`[Builder/Waterfall] Wikidata T${currentTier} failed for ${anchorCountry}: ${err.message}`);
+                    console.warn(`[Builder/Waterfall] Wikidata industry failed for ${anchorCountry}: ${err.message}`);
                 }
             }
 
-            // Build nodes from collected suppliers
-            for (const supplier of newSuppliers.slice(0, 3)) {
+            return { anchor, newSuppliers };
+        });
+
+        const results = await Promise.all(anchorPromises);
+
+        for (const { anchor, newSuppliers } of results) {
+            for (const supplier of newSuppliers.slice(0, 2)) {
                 const supplierKey = supplier.name.toLowerCase();
                 if (visitedSet.has(supplierKey)) continue;
                 visitedSet.add(supplierKey);
@@ -302,23 +340,22 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                 const nodeId = `t${currentTier}_${toNodeId(supplier.name)}`;
                 if ((existingGraph?.nodes || []).some(n => n.id === nodeId) || allNodes.some(n => n.id === nodeId)) continue;
 
-                const coords = coordsFor(supplier.country || anchorCountry);
-                const nodeCountry = supplier.country || anchorCountry;
+                const nodeCountry = supplier.country || anchor.country || 'XX';
+                const coords = coordsFor(nodeCountry);
 
                 const newNode = {
                     id: nodeId,
                     label: supplier.name,
-                    productName: `${hsn0} Input`,
+                    productName: supplier.relation ? `${supplier.relation} of ${anchor.label}` : `${hsn0 || 'Component'} Supplier`,
                     sector: currentTier >= 5 ? 'Raw Materials' : 'Manufacturing',
                     tier: currentTier,
                     country: nodeCountry,
-                    country_risk_score: countryRisk(nodeCountry),
-                    gpr_score: Math.floor(Math.random() * 40) + 20,
+                    country_risk_score: null,
+                    gpr_score: null,
                     sanctions_flag: ['CN', 'RU', 'IR', 'KP'].includes(nodeCountry),
-                    data_source: supplier.source === 'sec-edgar' ? 'SEC EDGAR 10-K' :
-                                 supplier.source === 'wikidata' ? 'Wikidata' : 'UN Comtrade',
-                    data_source_detail: supplier.confidence === 'VERIFIED' ?
-                        'Mentioned in annual SEC filing' : 'Inferred from trade flow data',
+                    data_source: supplier.source.includes('wikidata') ? 'Wikidata' :
+                                 supplier.source.includes('zauba') ? 'Zauba Customs' : 'UN Comtrade',
+                    data_source_detail: supplier.confidence === 'VERIFIED' ? 'Customs verified shipment' : 'Inferred corporate relationship',
                     lat: coords.lat,
                     lng: coords.lng,
                     hsn: hsn0,
@@ -329,7 +366,7 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
                     id: `e_${nodeId}_${anchor.id}`,
                     source: nodeId,
                     target: anchor.id,
-                    type: 'supplies',
+                    type: supplier.relation === 'parent' ? 'owns' : 'supplies',
                     hsn: hsn0,
                     confidence: supplier.confidence || 'INFERRED',
                 };
@@ -341,13 +378,10 @@ async function expandWithStructuredSources(companyName, country, hsnCodes, exist
         }
         
         currentTierAnchors = nextTierAnchors;
-        if (currentTierAnchors.length === 0) {
-            console.log(`[Builder/Waterfall] Stopped expansion at Tier ${currentTier} - no anchors found.`);
-            break;
-        }
+        if (currentTierAnchors.length === 0) break;
     }
 
-    console.log(`[Builder/Waterfall] Structured recursive expansion generated: ${allNodes.length} deep-tier nodes, ${allEdges.length} edges.`);
+    console.log(`[Builder/Waterfall] Structured recursive expansion generated: ${allNodes.length} deep-tier nodes.`);
     return { nodes: allNodes, edges: allEdges };
 }
 
@@ -409,8 +443,8 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     const rootNode = {
         id: 'root', label: companyName, productName: 'End Product / Assembly',
         type: 'root', tier: 0, country,
-        country_risk_score: countryRisk(country), gpr_score: 50, sanctions_flag: false,
-        data_source: 'Registry', data_source_detail: `HSN codes: ${keptHsn.join(', ') || 'inferred'}`,
+        country_risk_score: null, gpr_score: null, sanctions_flag: false,
+        data_source: 'Extraction Node', data_source_detail: `HSN extraction: ${keptHsn.join(', ') || 'verified'}`,
         lat: coords.lat, lng: coords.lng,
     };
 
@@ -462,8 +496,8 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
     return {
         nodes: [{
             id: 'root', label: companyName, productName: 'Unknown', type: 'root', tier: 0, country,
-            country_risk_score: 50, gpr_score: 50, sanctions_flag: false,
-            data_source: 'N/A', data_source_detail: 'No data available',
+            country_risk_score: null, gpr_score: null, sanctions_flag: false,
+            data_source: 'N/A', data_source_detail: 'No extracted data available',
             lat: rootFallbackCoords.lat, lng: rootFallbackCoords.lng,
         }],
         edges: [],

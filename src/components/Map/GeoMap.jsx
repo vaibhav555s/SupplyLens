@@ -132,7 +132,7 @@ const GeoMap = ({ graphData, visibleTiers, selectedNode, onNodeClick, disruption
                   })()}
                   {node.shipments > 0 && (
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                      {node.shipments.toLocaleString()} shipments
+                      {(node.shipments || 0).toLocaleString()} shipments
                     </div>
                   )}
                 </div>

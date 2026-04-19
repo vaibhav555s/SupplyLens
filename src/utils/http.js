@@ -159,6 +159,10 @@ async function httpPost(url, data, options = {}) {
                 throw e;
             }
 
+            if (response.status >= 400) {
+                throw new Error(`HTTP ${response.status}: ${url}`);
+            }
+
             return response.data;
         } catch (err) {
             lastError = err;
