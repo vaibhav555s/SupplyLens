@@ -339,8 +339,8 @@ const LandingPage = () => {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onKeyDown={handleKeyDown}
-              onClick={() => { if (!user) navigate('/auth') }}
-              readOnly={!user}
+              onClick={() => {}}
+              readOnly={false}
               placeholder="Enter company name — e.g. Tesla, Apple, Samsung"
               style={{
                 flex: 1,
@@ -354,7 +354,7 @@ const LandingPage = () => {
               }}
             />
             <button
-              onClick={() => { if (!user) navigate('/auth'); else handleSearch(); }}
+              onClick={() => { handleSearch(); }}
               style={{
                 background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
                 border: 'none',
@@ -370,7 +370,7 @@ const LandingPage = () => {
                 transition: 'opacity 0.2s',
               }}
             >
-              {!user ? 'Sign In' : isTracing ? 'Tracing...' : 'Trace Supply Chain →'}
+              {isTracing ? 'Tracing...' : 'Trace Supply Chain →'}
             </button>
           </div>
         </motion.div>
@@ -394,7 +394,7 @@ const LandingPage = () => {
           {recentSearches.map(name => (
             <button
               key={name}
-              onClick={() => { if (!user) navigate('/auth'); else handleSearch(name); }}
+              onClick={() => { handleSearch(name); }}
               style={{
                 background: 'none',
                 border: '1px solid rgba(255,255,255,0.08)',
