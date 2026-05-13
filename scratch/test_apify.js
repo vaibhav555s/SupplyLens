@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 async function test() {
-    const token = 'apify_api_7XrN0qvhbAUsnvEoPaOpnm9vndpCow2m1q0S';
+    const token = process.env.APIFY_API_TOKEN;
     const url = `https://api.apify.com/v2/acts/parseforge~importyeti-scraper/run-sync-get-dataset-items?token=${token}&timeout=60`;
     
     try {
