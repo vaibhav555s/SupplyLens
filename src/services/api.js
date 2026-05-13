@@ -3,12 +3,15 @@
  * Connects the React UI to the Module 1 & 2 Backend.
  */
 
+const VITE_URL = import.meta.env.VITE_API_URL || '';
+const BASE_URL = VITE_URL.trim().replace(/\/$/, '');
+
 const api = {
     /**
      * Resolve a company name to a canonical entity (Module 2)
      */
     async resolveCompany(name, country = '') {
-        const response = await fetch(`/api/entity/resolve?name=${encodeURIComponent(name)}&country=${country}`);
+        const response = await fetch(`${BASE_URL}/api/entity/resolve?name=${encodeURIComponent(name)}&country=${country}`);
         if (!response.ok) throw new Error('Resolution failed');
         return await response.json();
     },
@@ -17,7 +20,7 @@ const api = {
      * Infer real-time dynamic HSN codes for presentation
      */
     async inferHSNCodes(name) {
-        const response = await fetch(`/api/entity/hsn-infer?company=${encodeURIComponent(name)}`);
+        const response = await fetch(`${BASE_URL}/api/entity/hsn-infer?company=${encodeURIComponent(name)}`);
         if (!response.ok) throw new Error('HSN Inference failed');
         return await response.json();
     },
@@ -27,7 +30,7 @@ const api = {
      */
     async buildGraph(company, country = 'US', hsnCodes = []) {
         const hsnKeys = hsnCodes.join(',');
-        const response = await fetch(`/api/graph/build?company=${encodeURIComponent(company)}&country=${country}&hsnKeys=${encodeURIComponent(hsnKeys)}`);
+        const response = await fetch(`${BASE_URL}/api/graph/build?company=${encodeURIComponent(company)}&country=${country}&hsnKeys=${encodeURIComponent(hsnKeys)}`);
         if (!response.ok) throw new Error('Graph Build failed');
         return await response.json();
     },
@@ -37,7 +40,7 @@ const api = {
      */
     async resourceSupplier(nodeId, hsn, tier, parentId) {
         const params = new URLSearchParams({ nodeId, hsn: hsn || '', tier: tier || 1, parentId: parentId || 'root' });
-        const response = await fetch(`/api/graph/resource?${params.toString()}`);
+        const response = await fetch(`${BASE_URL}/api/graph/resource?${params.toString()}`);
         if (!response.ok) throw new Error('Resource failure');
         return await response.json();
     },
@@ -46,7 +49,7 @@ const api = {
      * Simulate a specific disruption cascading through the graph (V2)
      */
     async simulateDisruption(nodeId, disruptionType, graphData) {
-        const response = await fetch('/api/graph/disrupt', {
+        const response = await fetch(`${BASE_URL}/api/graph/disrupt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -64,7 +67,7 @@ const api = {
      * Scan the entire graph for SPOFs and structural vulnerabilities (V2)
      */
     async vulnerabilityScan(graphData) {
-        const response = await fetch('/api/graph/scan', {
+        const response = await fetch(`${BASE_URL}/api/graph/scan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -80,13 +83,13 @@ const api = {
      * Search for shipments (Module 1 - ImportYeti)
      */
     async getShipments(company) {
-        const response = await fetch(`/api/connectors/importyeti?company=${encodeURIComponent(company)}`);
+        const response = await fetch(`${BASE_URL}/api/connectors/importyeti?company=${encodeURIComponent(company)}`);
         if (!response.ok) throw new Error('Failed to fetch shipments');
         return await response.json();
     },
 
     async lookupHSCode(code) {
-        const response = await fetch(`/api/utils/normalize-hs?code=${encodeURIComponent(code)}`);
+        const response = await fetch(`${BASE_URL}/api/utils/normalize-hs?code=${encodeURIComponent(code)}`);
         if (!response.ok) throw new Error('HS Lookup failed');
         return await response.json();
     },
@@ -102,7 +105,7 @@ const api = {
         if (context.sector) params.set('sector', context.sector);
         if (context.confidence) params.set('confidence', context.confidence);
 
-        const response = await fetch(`/api/entity/summary?${params.toString()}`);
+        const response = await fetch(`${BASE_URL}/api/entity/summary?${params.toString()}`);
         if (!response.ok) throw new Error('Summary fetch failed');
         return await response.json();
     },
@@ -124,7 +127,7 @@ const api = {
     },
 
     async login(credentials) {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(`${BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials)
@@ -135,7 +138,7 @@ const api = {
     },
 
     async register(userData) {
-        const response = await fetch('/api/auth/register', {
+        const response = await fetch(`${BASE_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(userData)
@@ -146,7 +149,7 @@ const api = {
     },
 
     async getMe() {
-        const response = await fetch('/api/auth/me', {
+        const response = await fetch(`${BASE_URL}/api/auth/me`, {
             headers: this.getAuthHeaders()
         });
         const data = await response.json();
@@ -157,7 +160,7 @@ const api = {
     // ── Dashboard Persistence (MongoDB) ──
 
     async getDashboardHistory() {
-        const response = await fetch('/api/dashboard/history', {
+        const response = await fetch(`${BASE_URL}/api/dashboard/history`, {
             headers: this.getAuthHeaders()
         });
         const data = await response.json();
@@ -166,7 +169,7 @@ const api = {
     },
 
     async saveDashboardEntry({ companyName, country, flag, hsnCodes, graphData }) {
-        const response = await fetch('/api/dashboard/save', {
+        const response = await fetch(`${BASE_URL}/api/dashboard/save`, {
             method: 'POST',
             headers: this.getAuthHeaders(),
             body: JSON.stringify({ companyName, country, flag, hsnCodes, graphData }),
@@ -177,7 +180,7 @@ const api = {
     },
 
     async deleteDashboardEntry(id) {
-        const response = await fetch(`/api/dashboard/${id}`, {
+        const response = await fetch(`${BASE_URL}/api/dashboard/${id}`, {
             method: 'DELETE',
             headers: this.getAuthHeaders()
         });
@@ -187,7 +190,7 @@ const api = {
     },
 
     async clearDashboard() {
-        const response = await fetch('/api/dashboard/clear', {
+        const response = await fetch(`${BASE_URL}/api/dashboard/clear`, {
             method: 'DELETE',
             headers: this.getAuthHeaders()
         });
