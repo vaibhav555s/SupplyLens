@@ -1,14 +1,14 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 
-const GlassCard = ({ 
-  children, 
-  className = '', 
-  style = {}, 
-  onClick, 
+const GlassCard = ({
+  children,
+  className = '',
+  style = {},
+  onClick,
   hover = true,
   selected = false,
-  delay = 0 
+  delay = 0
 }) => {
   return (
     <motion.div
@@ -19,8 +19,8 @@ const GlassCard = ({
       onClick={onClick}
       style={{
         background: selected ? 'rgba(124, 58, 237, 0.08)' : '#111118',
-        border: selected 
-          ? '1px solid #7c3aed' 
+        border: selected
+          ? '1px solid #7c3aed'
           : '1px solid rgba(255, 255, 255, 0.06)',
         borderRadius: '16px',
         padding: '20px',

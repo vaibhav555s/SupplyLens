@@ -159,7 +159,12 @@ app.get('/api/graph/build', async (req, res) => {
         const hsnCodes = hsnKeys ? hsnKeys.split(',').filter(Boolean) : [];
 
         // V2 Cache Layer: Return instantly if we already built this graph globally
-        if (isDBConnected()) {
+        // EXCEPTION: Companies with curated PDF reference data always bypass the cache so that
+        // reference nodes are guaranteed to be present in the graph (old cache may pre-date them).
+        const { getReferenceData: _checkRef } = require('./data/companyReferenceData');
+        const _hasReferenceData = !!_checkRef(company);
+
+        if (isDBConnected() && !_hasReferenceData) {
             const CachedGraph = require('./db/models/CachedGraph');
             const cached = await CachedGraph.findOne({ companyName: company.toLowerCase().trim() });
             if (cached) {
@@ -182,6 +187,8 @@ app.get('/api/graph/build', async (req, res) => {
                 }
                 return res.json(graph);
             }
+        } else if (_hasReferenceData) {
+            console.log(`[Route/Graph] "${company}" has curated reference data — bypassing DB cache to ensure reference nodes are included.`);
         }
 
         let activeHsnCodes = [...hsnCodes];

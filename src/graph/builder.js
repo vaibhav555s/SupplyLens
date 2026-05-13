@@ -1,5 +1,5 @@
 // ─── Supply Chain Graph Builder v2 ───
-// Strategy: API-FIRST → Structured Sources → LLM Last Resort
+// Strategy: API-FIRST → Reference Data (PDF) → Structured Sources → LLM Last Resort
 //
 // Tier 1-2:  ImportYeti → Zauba → Comtrade (real customs data)
 // Tier 3-6:  Comtrade deep-dive → SEC EDGAR → Wikidata → LLM last resort
@@ -13,6 +13,7 @@ const { jsonrepair } = require('jsonrepair');
 const { filterBOM } = require('../logic/bomFilter');
 const { getSupplierMentions } = require('../connectors/edgar');
 const { getCompaniesByIndustryAndCountry, getCorporateHierarchy } = require('../connectors/wikidata');
+const { getReferenceData, mergeReferenceData } = require('../data/companyReferenceData');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -503,7 +504,26 @@ async function buildSupplyChainGraph(companyName, country = 'US', hsnCodes = [])
         apiGraph = { nodes: [rootNode], edges: [] };
     }
 
-    // Step 4: Structured source waterfall — Tier 3-6 (Recursive Comtrade → EDGAR → Wikidata)
+    // Step 4a: Reference Data injection — merge curated PDF nodes BEFORE the waterfall.
+    // This runs for any company that has reference data (currently: Tesla).
+    // Live API nodes always win over reference nodes — no duplication.
+    const refData = getReferenceData(companyName);
+    if (refData) {
+        try {
+            apiGraph = mergeReferenceData(apiGraph, refData);
+
+            // Mark reference node labels as visited so the waterfall doesn't re-discover them
+            for (const rn of refData.nodes) {
+                if (rn.label) visitedSet.add(rn.label.toLowerCase());
+            }
+
+            console.log(`[Graph] Reference data merged for "${companyName}": ${apiGraph.nodes.length} nodes total after merge.`);
+        } catch (refErr) {
+            console.warn(`[Graph] Reference data merge failed for "${companyName}": ${refErr.message}`);
+        }
+    }
+
+    // Step 4b: Structured source waterfall — Tier 3-6 (Recursive Comtrade → EDGAR → Wikidata)
     let finalGraph = apiGraph;
     if (apiGraph) {
         try {
